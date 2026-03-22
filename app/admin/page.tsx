@@ -654,6 +654,15 @@ export default function AdminPage() {
             菜單
           </button>
         )}
+        {userRole === 'staff' && (
+          <button
+            onClick={() => setActiveTab('menu')}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'menu' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}
+          >
+            <Settings size={16} />
+            庫存
+          </button>
+        )}
       </div>
 
       {activeTab === 'pos' ? (
@@ -916,14 +925,18 @@ export default function AdminPage() {
         <div className="space-y-6 pb-20">
           <div className="flex flex-col gap-4 px-1">
             <div className="flex justify-between items-center">
-              <h2 className="font-bold text-gray-800 text-lg">菜單品項管理</h2>
-              <button
-                onClick={() => setShowAddProductModal(true)}
-                className="flex items-center gap-1 bg-red-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-red-100 font-bold text-sm"
-              >
-                <Plus size={18} />
-                新增品項
-              </button>
+              <h2 className="font-bold text-gray-800 text-lg">
+                {userRole === 'boss' ? '菜單品項管理' : '品項庫存管理'}
+              </h2>
+              {userRole === 'boss' && (
+                <button
+                  onClick={() => setShowAddProductModal(true)}
+                  className="flex items-center gap-1 bg-red-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-red-100 font-bold text-sm"
+                >
+                  <Plus size={18} />
+                  新增品項
+                </button>
+              )}
             </div>
 
             {/* Search and Filter */}
@@ -1041,18 +1054,22 @@ export default function AdminPage() {
                         >
                           <CheckCircle size={20} />
                         </button>
-                        <button 
-                          onClick={() => setEditingProduct(product)}
-                          className="p-2 text-gray-400 hover:text-blue-500 bg-gray-50 rounded-xl transition-colors"
-                        >
-                          <Edit2 size={20} />
-                        </button>
-                        <button 
-                          onClick={() => setDeleteConfirmId(product.id)}
-                          className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl transition-colors"
-                        >
-                          <Trash2 size={20} />
-                        </button>
+                        {userRole === 'boss' && (
+                          <>
+                            <button 
+                              onClick={() => setEditingProduct(product)}
+                              className="p-2 text-gray-400 hover:text-blue-500 bg-gray-50 rounded-xl transition-colors"
+                            >
+                              <Edit2 size={20} />
+                            </button>
+                            <button 
+                              onClick={() => setDeleteConfirmId(product.id)}
+                              className="p-2 text-gray-400 hover:text-red-500 bg-gray-50 rounded-xl transition-colors"
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
