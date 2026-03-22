@@ -25,3 +25,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
   }
 }
+
+export async function PUT(request: Request) {
+  try {
+    const orders = await getOrders();
+    const { id, status } = await request.json();
+    const index = orders.findIndex(o => o.id === id);
+    if (index !== -1) {
+      orders[index].status = status;
+      await saveOrders(orders);
+      return NextResponse.json(orders[index]);
+    }
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const orders = await getOrders();
+    const { id } = await request.json();
+    const filtered = orders.filter(o => o.id !== id);
+    await saveOrders(filtered);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to delete order' }, { status: 500 });
+  }
+}

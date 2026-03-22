@@ -349,11 +349,49 @@ export default function AdminPage() {
       const savedEntry = await financeRes.json();
       setEntries(prev => [savedEntry, ...prev]);
 
-      // 2. Remove order from local state
-      setOrders(prev => prev.filter(o => o.id !== order.id));
+      // 2. Remove order from database
+      const orderRes = await fetch('/api/orders', {
+        method: 'DELETE',
+        body: JSON.stringify({ id: order.id }),
+      });
+
+      if (orderRes.ok) {
+        // 3. Remove order from local state
+        setOrders(prev => prev.filter(o => o.id !== order.id));
+      }
     } catch (error) {
       console.error('Complete order error:', error);
       alert('處理訂單失敗，請稍後再試！');
+    }
+  };
+
+  const updateOrderStatus = async (id: string, status: string) => {
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'PUT',
+        body: JSON.stringify({ id, status }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setOrders(prev => prev.map(o => o.id === id ? updated : o));
+      }
+    } catch (error) {
+      console.error('Update order status error:', error);
+    }
+  };
+
+  const deleteOrder = async (id: string) => {
+    if (!confirm('確定要刪除這筆訂單嗎？')) return;
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'DELETE',
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setOrders(prev => prev.filter(o => o.id !== id));
+      }
+    } catch (error) {
+      console.error('Delete order error:', error);
     }
   };
 
@@ -822,13 +860,33 @@ export default function AdminPage() {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => completeOrder(order)}
-                  className="w-full bg-green-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"
-                >
-                  <CheckCircle size={18} />
-                  出餐並結帳
-                </button>
+                <div className="flex gap-2">
+                  {order.status === 'pending' ? (
+                    <button
+                      onClick={() => updateOrderStatus(order.id, 'preparing')}
+                      className="flex-1 bg-blue-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600"
+                    >
+                      <Clock size={18} />
+                      開始製作
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => completeOrder(order)}
+                      className="flex-1 bg-green-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"
+                    >
+                      <CheckCircle size={18} />
+                      出餐並結帳
+                    </button>
+                  )}
+                  {userRole === 'boss' && (
+                    <button
+                      onClick={() => deleteOrder(order.id)}
+                      className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={20} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))
           )}
