@@ -56,13 +56,5 @@ export let PRODUCTS: Product[] = [
 ];
 
 export let orders: Order[] = [];
-export let financeEntries: FinanceEntry[] = [
-  { id: 'f1', type: 'expense', category: '食材', amount: 500, description: '採買食材', date: '2026-03-20' },
-  { id: 'f2', type: 'income', amount: 1200, description: '午餐時段營收', date: '2026-03-20' },
-  { id: 'f3', type: 'expense', category: '人事', amount: 1500, description: '計時人員工資', date: '2026-03-21' },
-  { id: 'f4', type: 'expense', category: '固定成本', amount: 3000, description: '店鋪租金', date: '2026-03-21' },
-];
-
-export let dailyCloses: DailyClose[] = [
-  { date: '2026-03-20', totalIncome: 1200, totalExpense: 500, profit: 700, closedAt: '2026-03-20T21:00:00Z' }
-];
+export let financeEntries: FinanceEntry[] = [];
+export let dailyCloses: DailyClose[] = [];

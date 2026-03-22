@@ -331,6 +331,27 @@ export default function AdminPage() {
     }
   };
 
+  const handleClearDatabase = async () => {
+    if (!confirm('⚠️ 警告：這將會清空所有的訂單、收支紀錄與關帳紀錄（保留菜單）！\n此操作無法復原，確定要執行嗎？')) return;
+    
+    try {
+      const res = await fetch('/api/admin/clear-db', {
+        method: 'POST',
+        body: JSON.stringify({ password: '8888' }),
+      });
+      
+      if (res.ok) {
+        alert('數據已成功清空！頁面即將重新整理。');
+        window.location.reload();
+      } else {
+        alert('清空失敗，請確認您的權限。');
+      }
+    } catch (error) {
+      console.error('Clear DB error:', error);
+      alert('發生錯誤，請稍後再試。');
+    }
+  };
+
   const completeOrder = async (order: Order) => {
     try {
       // 1. Add order total to finance entries
@@ -1123,6 +1144,13 @@ export default function AdminPage() {
                   >
                     <Plus size={16} />
                     新增紀錄
+                  </button>
+                  <button
+                    onClick={handleClearDatabase}
+                    className="flex items-center gap-1 text-sm bg-white text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors"
+                    title="清空所有數據"
+                  >
+                    <Trash2 size={16} />
                   </button>
                 </>
               )}
