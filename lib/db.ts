@@ -1,11 +1,18 @@
 import { createClient } from '@vercel/kv';
 import { Product, Order, FinanceEntry, DailyClose, PRODUCTS as MOCK_PRODUCTS, financeEntries as MOCK_FINANCE, dailyCloses as MOCK_CLOSES } from './data';
 
-// 自動偵測 Vercel KV 的環境變數 (支援 KV_ 或 STORAGE_ 前綴)
-const kv = createClient({
-  url: process.env.KV_REST_API_URL || process.env.STORAGE_REST_API_URL || '',
-  token: process.env.KV_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || '',
-});
+// 支援多種 Vercel Redis/KV 環境變數名稱
+const kvUrl = process.env.KV_REST_API_URL || process.env.STORAGE_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const kvToken = process.env.KV_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+// 只有在有環境變數時才建立 KV 客戶端
+const kv = kvUrl && kvToken ? createClient({ url: kvUrl, token: kvToken }) : null;
+
+// 記憶體備援 (如果資料庫沒接通時使用)
+let memoryOrders: Order[] = [];
+let memoryFinance: FinanceEntry[] = [...MOCK_FINANCE];
+let memoryCloses: DailyClose[] = [...MOCK_CLOSES];
+let memoryProducts: Product[] = [...MOCK_PRODUCTS];
 
 const KEYS = {
   PRODUCTS: 'kitchen_products',
@@ -17,6 +24,7 @@ const KEYS = {
 // Products
 export async function getProducts(): Promise<Product[]> {
   try {
+    if (!kv) return memoryProducts;
     const products = await kv.get<Product[]>(KEYS.PRODUCTS);
     if (!products || products.length === 0) {
       await kv.set(KEYS.PRODUCTS, MOCK_PRODUCTS);
@@ -24,53 +32,64 @@ export async function getProducts(): Promise<Product[]> {
     }
     return products;
   } catch (e) {
-    console.error('KV getProducts error:', e);
-    return MOCK_PRODUCTS;
+    console.error('KV getProducts error, falling back to memory:', e);
+    return memoryProducts;
   }
 }
 
 export async function saveProducts(products: Product[]) {
-  await kv.set(KEYS.PRODUCTS, products);
+  memoryProducts = products;
+  if (kv) await kv.set(KEYS.PRODUCTS, products);
 }
 
 // Orders
 export async function getOrders(): Promise<Order[]> {
   try {
+    if (!kv) return memoryOrders;
     const orders = await kv.get<Order[]>(KEYS.ORDERS);
     return orders || [];
   } catch (e) {
-    return [];
+    console.error('KV getOrders error, falling back to memory:', e);
+    return memoryOrders;
   }
 }
 
 export async function saveOrders(orders: Order[]) {
-  await kv.set(KEYS.ORDERS, orders);
+  memoryOrders = orders;
+  if (kv) await kv.set(KEYS.ORDERS, orders);
 }
 
 // Finance
 export async function getFinanceEntries(): Promise<FinanceEntry[]> {
   try {
+    if (!kv) return memoryFinance;
     const entries = await kv.get<FinanceEntry[]>(KEYS.FINANCE);
     return entries || MOCK_FINANCE;
   } catch (e) {
-    return MOCK_FINANCE;
+    console.error('KV getFinanceEntries error, falling back to memory:', e);
+    return memoryFinance;
   }
 }
 
 export async function saveFinanceEntries(entries: FinanceEntry[]) {
-  await kv.set(KEYS.FINANCE, entries);
+  memoryFinance = entries;
+  if (kv) await kv.set(KEYS.FINANCE, entries);
 }
 
 // Daily Closes
 export async function getDailyCloses(): Promise<DailyClose[]> {
   try {
+    if (!kv) return memoryCloses;
     const closes = await kv.get<DailyClose[]>(KEYS.CLOSES);
     return closes || MOCK_CLOSES;
   } catch (e) {
-    return MOCK_CLOSES;
+    console.error('KV getDailyCloses error, falling back to memory:', e);
+    return memoryCloses;
   }
 }
 
 export async function saveDailyCloses(closes: DailyClose[]) {
-  await kv.set(KEYS.CLOSES, closes);
+  memoryCloses = closes;
+  if (kv) await kv.set(KEYS.CLOSES, closes);
 }
+
