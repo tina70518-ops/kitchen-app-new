@@ -1,5 +1,11 @@
-import { kv } from '@vercel/kv';
+import { createClient } from '@vercel/kv';
 import { Product, Order, FinanceEntry, DailyClose, PRODUCTS as MOCK_PRODUCTS, financeEntries as MOCK_FINANCE, dailyCloses as MOCK_CLOSES } from './data';
+
+// 自動偵測 Vercel KV 的環境變數 (支援 KV_ 或 STORAGE_ 前綴)
+const kv = createClient({
+  url: process.env.KV_REST_API_URL || process.env.STORAGE_REST_API_URL || '',
+  token: process.env.KV_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || '',
+});
 
 const KEYS = {
   PRODUCTS: 'kitchen_products',
