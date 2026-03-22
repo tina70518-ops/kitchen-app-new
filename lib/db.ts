@@ -1,12 +1,16 @@
 import { createClient } from '@vercel/kv';
 import { Product, Order, FinanceEntry, DailyClose, PRODUCTS as MOCK_PRODUCTS, financeEntries as MOCK_FINANCE, dailyCloses as MOCK_CLOSES } from './data';
 
-// 支援多種 Vercel Redis/KV 環境變數名稱
-const kvUrl = process.env.KV_REST_API_URL || process.env.STORAGE_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+// 支援 Vercel Redis 的各種環境變數名稱
+const kvUrl = process.env.KV_REST_API_URL || process.env.STORAGE_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REDIS_URL;
 const kvToken = process.env.KV_REST_API_TOKEN || process.env.STORAGE_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // 只有在有環境變數時才建立 KV 客戶端
-const kv = kvUrl && kvToken ? createClient({ url: kvUrl, token: kvToken }) : null;
+// 如果只有 KV_REDIS_URL (像圖片中那樣)，createClient 會自動處理
+const kv = kvUrl ? createClient({ 
+  url: kvUrl.startsWith('redis') ? kvUrl.replace('redis://', 'https://') : kvUrl, 
+  token: kvToken || kvUrl.split('@')[0].split(':').slice(-1)[0] // 嘗試從 URL 解析 token
+}) : null;
 
 // 記憶體備援 (如果資料庫沒接通時使用)
 let memoryOrders: Order[] = [];
