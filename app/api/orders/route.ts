@@ -16,10 +16,12 @@ export async function POST(request: Request) {
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
-    orders.unshift(newOrder);
-    await saveOrders(orders);
+    
+    const updatedOrders = [newOrder, ...orders];
+    await saveOrders(updatedOrders);
     return NextResponse.json(newOrder);
   } catch (error) {
+    console.error('Create order error:', error);
     return NextResponse.json({ error: 'Failed to create order' }, { status: 500 });
   }
 }
