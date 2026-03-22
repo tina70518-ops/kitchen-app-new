@@ -401,8 +401,18 @@ export default function AdminPage() {
     setPosCart(prev => prev.map((item, i) => i === index ? { ...item, spiciness, note } : item));
   };
 
-  const deleteEntry = (id: string) => {
-    setEntries(entries.filter(e => e.id !== id));
+  const deleteEntry = async (id: string) => {
+    try {
+      const res = await fetch('/api/finance', {
+        method: 'DELETE',
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setEntries(entries.filter(e => e.id !== id));
+      }
+    } catch (error) {
+      console.error('Delete entry error:', error);
+    }
   };
 
   const handleAddProduct = async () => {
