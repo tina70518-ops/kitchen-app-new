@@ -12,8 +12,13 @@ const KEYS = {
 export async function getProducts(): Promise<Product[]> {
   try {
     const products = await kv.get<Product[]>(KEYS.PRODUCTS);
-    return products || MOCK_PRODUCTS;
+    if (!products || products.length === 0) {
+      await kv.set(KEYS.PRODUCTS, MOCK_PRODUCTS);
+      return MOCK_PRODUCTS;
+    }
+    return products;
   } catch (e) {
+    console.error('KV getProducts error:', e);
     return MOCK_PRODUCTS;
   }
 }
