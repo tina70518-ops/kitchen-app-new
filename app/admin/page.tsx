@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, ArrowLeft, Plus, Trash2, ClipboardList, CheckCircle, Lock, ShoppingBag, Minus, BarChart3, User, Phone, Clock, Volume2, BellRing, Settings, Edit2, Save, X, Search, AlertTriangle, UserCircle, Package, History } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ArrowLeft, Plus, Trash2, ClipboardList, CheckCircle, Lock, ShoppingBag, Minus, BarChart3, User, Phone, Clock, Volume2, BellRing, Settings, Edit2, Save, X, Search, AlertTriangle, UserCircle, Package, History, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { FinanceEntry, Order, PRODUCTS, Product, DailyClose, SupplierProduct, PurchaseOrder } from '@/lib/data';
-import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<'boss' | 'staff' | null>(null);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'pos' | 'orders' | 'finance' | 'menu' | 'purchase'>('pos');
+  const [activeTab, setActiveTab] = useState<'pos' | 'orders' | 'finance' | 'menu' | 'purchase' | 'report'>('pos');
   const [chartView, setChartView] = useState<'day' | 'week' | 'month'>('day');
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
@@ -22,7 +22,7 @@ export default function AdminPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
-  const [newProduct, setNewProduct] = useState<Partial<Product>>({ name: '', price: 0, category: '炸物', isAvailable: true });
+  const [newProduct, setNewProduct] = useState<Partial<Product>>({ name: '', price: 0, category: '炸物', isAvailable: true, cost: 0 });
   const [posCart, setPosCart] = useState<{ product: Product, quantity: number, spiciness?: '不辣' | '小辣' | '中辣' | '大辣', note?: string }[]>([]);
   const [showPosCart, setShowPosCart] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -31,6 +31,7 @@ export default function AdminPage() {
   const [menuActiveCategory, setMenuActiveCategory] = useState('全部');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
 
   // 進貨相關 state
   const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
@@ -186,6 +187,63 @@ export default function AdminPage() {
     return { dailyRevenue, dailyOrderCount, weeklyRevenue, monthlyRevenue, reportRevenue, reportExpense, reportOrderCount, ranking, aov, dailyAov, orderCount: reportOrderCount, expensePieData };
   }, [entries, reportStartDate, reportEndDate, useCustomDateRange]);
 
+  // 月結報表數據
+  const reportStats = useMemo(() => {
+    const monthIncome = entries.filter(e => e.type === 'income' && e.date.startsWith(reportMonth));
+    const monthExpense = entries.filter(e => e.type === 'expense' && e.date.startsWith(reportMonth));
+    const totalIncome = monthIncome.reduce((s, e) => s + e.amount, 0);
+    const totalExpense = monthExpense.reduce((s, e) => s + e.amount, 0);
+    const netProfit = totalIncome - totalExpense;
+
+    // 上個月
+    const prevMonth = new Date(reportMonth + '-01');
+    prevMonth.setMonth(prevMonth.getMonth() - 1);
+    const prevMonthStr = prevMonth.toISOString().slice(0, 7);
+    const prevIncome = entries.filter(e => e.type === 'income' && e.date.startsWith(prevMonthStr)).reduce((s, e) => s + e.amount, 0);
+    const prevExpense = entries.filter(e => e.type === 'expense' && e.date.startsWith(prevMonthStr)).reduce((s, e) => s + e.amount, 0);
+    const prevProfit = prevIncome - prevExpense;
+
+    const incomeGrowth = prevIncome > 0 ? Math.round(((totalIncome - prevIncome) / prevIncome) * 100) : 0;
+    const expenseGrowth = prevExpense > 0 ? Math.round(((totalExpense - prevExpense) / prevExpense) * 100) : 0;
+    const profitGrowth = prevProfit !== 0 ? Math.round(((netProfit - prevProfit) / Math.abs(prevProfit)) * 100) : 0;
+
+    // 每日收支趨勢
+    const dailyData: Record<string, { date: string, income: number, expense: number }> = {};
+    entries.filter(e => e.date.startsWith(reportMonth)).forEach(e => {
+      if (!dailyData[e.date]) dailyData[e.date] = { date: e.date, income: 0, expense: 0 };
+      if (e.type === 'income') dailyData[e.date].income += e.amount;
+      else dailyData[e.date].expense += e.amount;
+    });
+    const dailyChartData = Object.values(dailyData).sort((a, b) => a.date.localeCompare(b.date));
+
+    // 支出分類
+    const expenseByCategory: Record<string, number> = { '食材': 0, '人事': 0, '固定成本': 0, '其他': 0 };
+    monthExpense.forEach(e => { const cat = e.category || '其他'; expenseByCategory[cat] = (expenseByCategory[cat] || 0) + e.amount; });
+    const expensePieData = Object.entries(expenseByCategory).filter(([_, v]) => v > 0).map(([name, value]) => ({ name, value }));
+
+    // 成本分析
+    const productSales: Record<string, { name: string, quantity: number, revenue: number, cost: number }> = {};
+    monthIncome.forEach(e => {
+      if (e.items) {
+        e.items.forEach(item => {
+          const prod = products.find(p => p.id === item.product.id);
+          const cost = prod?.cost || 0;
+          if (!productSales[item.product.id]) productSales[item.product.id] = { name: item.product.name, quantity: 0, revenue: 0, cost: 0 };
+          productSales[item.product.id].quantity += item.quantity;
+          productSales[item.product.id].revenue += item.product.price * item.quantity;
+          productSales[item.product.id].cost += cost * item.quantity;
+        });
+      }
+    });
+    const costAnalysis = Object.values(productSales).map(p => ({
+      ...p,
+      profit: p.revenue - p.cost,
+      margin: p.revenue > 0 ? Math.round(((p.revenue - p.cost) / p.revenue) * 100) : 0,
+    })).sort((a, b) => b.margin - a.margin);
+
+    return { totalIncome, totalExpense, netProfit, incomeGrowth, expenseGrowth, profitGrowth, prevIncome, prevExpense, prevProfit, dailyChartData, expensePieData, costAnalysis };
+  }, [entries, reportMonth, products]);
+
   const filteredMenuProducts = useMemo(() => {
     return products.filter(p => {
       const matchesSearch = p.name.toLowerCase().includes(menuSearchTerm.toLowerCase());
@@ -299,7 +357,7 @@ export default function AdminPage() {
       const saved = await res.json();
       setProducts([...products, saved]);
       setShowAddProductModal(false);
-      setNewProduct({ name: '', price: 0, category: '炸物', isAvailable: true });
+      setNewProduct({ name: '', price: 0, category: '炸物', isAvailable: true, cost: 0 });
     }
   };
 
@@ -323,7 +381,6 @@ export default function AdminPage() {
     if (res.ok) { setProducts(products.filter(p => p.id !== id)); setDeleteConfirmId(null); }
   };
 
-  // 進貨相關 handlers
   const handleAddSupplierProduct = async () => {
     if (!newSupplierProduct.name || !newSupplierProduct.supplier) return;
     const res = await fetch('/api/supplier-products', { method: 'POST', body: JSON.stringify(newSupplierProduct) });
@@ -400,9 +457,7 @@ export default function AdminPage() {
       orders.forEach((o: PurchaseOrder) => {
         if (o.status === 'completed') {
           o.items.forEach(item => {
-            if (item.supplierProduct.id === productId) {
-              histories.push({ date: o.date, unitPrice: item.unitPrice, orderId: o.id });
-            }
+            if (item.supplierProduct.id === productId) histories.push({ date: o.date, unitPrice: item.unitPrice, orderId: o.id });
           });
         }
       });
@@ -467,7 +522,10 @@ export default function AdminPage() {
         <button onClick={() => setActiveTab('finance')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'finance' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><DollarSign size={14} />財務</button>
         <button onClick={() => setActiveTab('menu')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'menu' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><Settings size={14} />{userRole === 'boss' ? '菜單' : '庫存'}</button>
         {userRole === 'boss' && (
-          <button onClick={() => setActiveTab('purchase')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'purchase' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><Package size={14} />進貨</button>
+          <>
+            <button onClick={() => setActiveTab('purchase')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'purchase' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><Package size={14} />進貨</button>
+            <button onClick={() => setActiveTab('report')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'report' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><FileText size={14} />報表</button>
+          </>
         )}
       </div>
 
@@ -653,10 +711,14 @@ export default function AdminPage() {
                           <label className="text-[10px] font-bold text-gray-400 ml-1 mb-1 block">品項名稱</label>
                           <input className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={editingProduct.name} onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div>
-                            <label className="text-[10px] font-bold text-gray-400 ml-1 mb-1 block">價格</label>
+                            <label className="text-[10px] font-bold text-gray-400 ml-1 mb-1 block">售價</label>
                             <input type="number" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-black text-red-500 focus:ring-2 focus:ring-blue-500 outline-none" value={editingProduct.price} onChange={(e) => setEditingProduct({ ...editingProduct, price: Number(e.target.value) })} />
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-gray-400 ml-1 mb-1 block">成本</label>
+                            <input type="number" className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-black text-orange-500 focus:ring-2 focus:ring-blue-500 outline-none" value={editingProduct.cost || 0} onChange={(e) => setEditingProduct({ ...editingProduct, cost: Number(e.target.value) })} />
                           </div>
                           <div>
                             <label className="text-[10px] font-bold text-gray-400 ml-1 mb-1 block">類別</label>
@@ -665,6 +727,12 @@ export default function AdminPage() {
                             </select>
                           </div>
                         </div>
+                        {editingProduct.price > 0 && editingProduct.cost !== undefined && editingProduct.cost > 0 && (
+                          <div className="bg-green-50 p-3 rounded-xl flex justify-between items-center">
+                            <span className="text-xs font-bold text-green-600">預估毛利率</span>
+                            <span className="text-lg font-black text-green-600">{Math.round(((editingProduct.price - editingProduct.cost) / editingProduct.price) * 100)}%</span>
+                          </div>
+                        )}
                       </div>
                       <button onClick={handleUpdateProduct} className="w-full bg-blue-500 text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-100 hover:bg-blue-600"><Save size={18} /> 儲存變更</button>
                     </div>
@@ -674,9 +742,17 @@ export default function AdminPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[10px] font-black text-red-500 bg-red-50 px-2 py-0.5 rounded-full uppercase tracking-wider">{product.category}</span>
                           {product.isAvailable === false && <span className="text-[10px] font-black text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full uppercase tracking-wider">已售完</span>}
+                          {product.cost && product.cost > 0 && (
+                            <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                              毛利 {Math.round(((product.price - product.cost) / product.price) * 100)}%
+                            </span>
+                          )}
                         </div>
                         <h4 className="font-bold text-gray-800 text-lg">{product.name}</h4>
-                        <p className="text-base font-black text-red-500">${product.price}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-base font-black text-red-500">${product.price}</p>
+                          {product.cost && product.cost > 0 && <p className="text-xs text-gray-400">成本 ${product.cost}</p>}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={() => toggleProductAvailability(product)} className={`p-2 rounded-xl transition-all ${product.isAvailable === false ? 'bg-gray-100 text-gray-400' : 'bg-green-50 text-green-600'}`} title={product.isAvailable === false ? '設為供貨中' : '設為已售完'}><CheckCircle size={20} /></button>
@@ -713,7 +789,6 @@ export default function AdminPage() {
             <button onClick={() => setActiveSupplierTab('orders')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeSupplierTab === 'orders' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500'}`}>進貨單</button>
             <button onClick={() => setActiveSupplierTab('products')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeSupplierTab === 'products' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500'}`}>供應商商品</button>
           </div>
-
           {activeSupplierTab === 'products' ? (
             <div className="space-y-4">
               <div className="flex justify-between items-center px-1">
@@ -785,6 +860,152 @@ export default function AdminPage() {
               )}
             </div>
           )}
+        </div>
+      ) : activeTab === 'report' ? (
+        <div className="space-y-6 pb-20">
+          {/* 月份選擇 */}
+          <div className="flex items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+            <FileText size={20} className="text-red-500" />
+            <div className="flex-1">
+              <label className="text-xs font-bold text-gray-400 block mb-1">選擇月份</label>
+              <input type="month" className="w-full bg-transparent text-sm font-bold text-gray-800 outline-none" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />
+            </div>
+          </div>
+
+          {/* 月度總覽 */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-green-50 p-4 rounded-2xl border border-green-100 text-center">
+              <p className="text-[10px] font-bold text-green-400 mb-1">總收入</p>
+              <p className="text-lg font-black text-green-600">${reportStats.totalIncome}</p>
+              <p className={`text-[10px] font-bold mt-1 ${reportStats.incomeGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportStats.incomeGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.incomeGrowth)}%
+              </p>
+            </div>
+            <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
+              <p className="text-[10px] font-bold text-red-400 mb-1">總支出</p>
+              <p className="text-lg font-black text-red-600">${reportStats.totalExpense}</p>
+              <p className={`text-[10px] font-bold mt-1 ${reportStats.expenseGrowth <= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportStats.expenseGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.expenseGrowth)}%
+              </p>
+            </div>
+            <div className={`p-4 rounded-2xl border text-center ${reportStats.netProfit >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100'}`}>
+              <p className={`text-[10px] font-bold mb-1 ${reportStats.netProfit >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>淨利</p>
+              <p className={`text-lg font-black ${reportStats.netProfit >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>${reportStats.netProfit}</p>
+              <p className={`text-[10px] font-bold mt-1 ${reportStats.profitGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportStats.profitGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.profitGrowth)}%
+              </p>
+            </div>
+          </div>
+
+          {/* 每日趨勢圖 */}
+          {reportStats.dailyChartData.length > 0 && (
+            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><BarChart3 size={18} className="text-red-500" />每日收支趨勢</h3>
+              <div className="h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={reportStats.dailyChartData}>
+                    <defs>
+                      <linearGradient id="reportIncome" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient>
+                      <linearGradient id="reportExpense" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 9, fill: '#9ca3af'}} tickFormatter={(val) => val.split('-')[2]} />
+                    <YAxis hide />
+                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                    <Area type="monotone" dataKey="income" stroke="#22c55e" strokeWidth={2} fillOpacity={1} fill="url(#reportIncome)" />
+                    <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#reportExpense)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-center gap-6 mt-2">
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[10px] text-gray-400">收入</span></div>
+                <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-red-500" /><span className="text-[10px] text-gray-400">支出</span></div>
+              </div>
+            </div>
+          )}
+
+          {/* 支出分類圓餅圖 */}
+          {reportStats.expensePieData.length > 0 && (
+            <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+              <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingDown size={18} className="text-red-500" />支出分類分析</h3>
+              <div className="h-40 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={reportStats.expensePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                      {reportStats.expensePieData.map((_, index) => (<Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4]} />))}
+                    </Pie>
+                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
+                {reportStats.expensePieData.map((item, index) => (
+                  <div key={item.name} className="flex items-center gap-2">
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4] }} />
+                    <span className="text-[10px] font-bold text-gray-600">{item.name}</span>
+                    <span className="text-[10px] font-black text-gray-400">${item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 成本分析 */}
+          <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-green-500" />菜品毛利分析</h3>
+            {reportStats.costAnalysis.length === 0 ? (
+              <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                <p className="text-sm text-gray-400">本月無銷售數據</p>
+                <p className="text-xs text-gray-300 mt-1">請先在菜單管理中設定各品項的成本</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reportStats.costAnalysis.map((item, index) => (
+                  <div key={item.name} className="bg-gray-50 p-4 rounded-2xl">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-bold text-gray-800">{item.name}</p>
+                        <p className="text-xs text-gray-400">售出 {item.quantity} 份 · 營收 ${item.revenue}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-sm font-black px-2 py-1 rounded-lg ${item.margin >= 60 ? 'bg-green-100 text-green-600' : item.margin >= 40 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                          {item.cost > 0 ? `毛利 ${item.margin}%` : '未設成本'}
+                        </span>
+                      </div>
+                    </div>
+                    {item.cost > 0 && (
+                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                        <div className={`h-2 rounded-full ${item.margin >= 60 ? 'bg-green-500' : item.margin >= 40 ? 'bg-yellow-500' : 'bg-red-500'}`} style={{ width: `${Math.min(item.margin, 100)}%` }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 上月比較 */}
+          <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+            <h3 className="font-bold text-gray-800 mb-4">與上月比較</h3>
+            <div className="space-y-3">
+              {[
+                { label: '收入', current: reportStats.totalIncome, prev: reportStats.prevIncome, color: 'green' },
+                { label: '支出', current: reportStats.totalExpense, prev: reportStats.prevExpense, color: 'red' },
+                { label: '淨利', current: reportStats.netProfit, prev: reportStats.prevProfit, color: 'blue' },
+              ].map(item => (
+                <div key={item.label} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                  <span className="text-sm font-bold text-gray-600">{item.label}</span>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs text-gray-400">上月 ${item.prev}</span>
+                    <span className="text-sm font-black text-gray-800">本月 ${item.current}</span>
+                    <span className={`text-xs font-black ${item.current >= item.prev ? 'text-green-500' : 'text-red-500'}`}>
+                      {item.current >= item.prev ? '↑' : '↓'} ${Math.abs(item.current - item.prev)}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       ) : (
         <div className="space-y-6">
@@ -896,28 +1117,17 @@ export default function AdminPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
             <h2 className="text-xl font-bold mb-4 text-gray-800">新增供應商商品</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">商品名稱</label>
-                <input type="text" placeholder="例如：雞肉、炸油" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.name} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, name: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">供應商</label>
-                <input type="text" placeholder="例如：台灣肉品行" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.supplier} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, supplier: e.target.value })} />
-              </div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">商品名稱</label><input type="text" placeholder="例如：雞肉、炸油" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.name} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, name: e.target.value })} /></div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">供應商</label><input type="text" placeholder="例如：台灣肉品行" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.supplier} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, supplier: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">單位</label>
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">單位</label>
                   <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.unit} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, unit: e.target.value as any })}>
                     <option value="kg">kg</option><option value="桶">桶</option><option value="包">包</option><option value="個">個</option><option value="箱">箱</option><option value="其他">其他</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">預設單價</label>
-                  <input type="number" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newSupplierProduct.defaultPrice} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, defaultPrice: Number(e.target.value) })} />
-                </div>
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">預設單價</label><input type="number" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newSupplierProduct.defaultPrice} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, defaultPrice: Number(e.target.value) })} /></div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">分類</label>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">分類</label>
                 <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.category} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, category: e.target.value as any })}>
                   <option value="食材">食材</option><option value="包材">包材</option><option value="其他">其他</option>
                 </select>
@@ -937,10 +1147,7 @@ export default function AdminPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm max-h-[85vh] overflow-y-auto animate-in zoom-in duration-200">
             <h2 className="text-xl font-bold mb-4 text-gray-800">建立進貨單</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">供應商</label>
-                <input type="text" placeholder="供應商名稱" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newPurchaseOrder.supplier} onChange={(e) => setNewPurchaseOrder({ ...newPurchaseOrder, supplier: e.target.value })} />
-              </div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">供應商</label><input type="text" placeholder="供應商名稱" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newPurchaseOrder.supplier} onChange={(e) => setNewPurchaseOrder({ ...newPurchaseOrder, supplier: e.target.value })} /></div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-2">選擇商品</label>
                 {supplierProducts.length === 0 ? (
@@ -948,8 +1155,7 @@ export default function AdminPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                     {supplierProducts.map(p => (
-                      <button key={p.id} onClick={() => addItemToPurchaseOrder(p)}
-                        className={`p-2 rounded-xl text-xs font-bold border text-left transition-all ${newPurchaseOrder.items.find(i => i.supplierProduct.id === p.id) ? 'bg-red-50 border-red-200 text-red-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                      <button key={p.id} onClick={() => addItemToPurchaseOrder(p)} className={`p-2 rounded-xl text-xs font-bold border text-left transition-all ${newPurchaseOrder.items.find(i => i.supplierProduct.id === p.id) ? 'bg-red-50 border-red-200 text-red-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
                         {p.name}<br/><span className="font-normal text-gray-400">${p.defaultPrice}/{p.unit}</span>
                       </button>
                     ))}
@@ -966,14 +1172,8 @@ export default function AdminPage() {
                         <button onClick={() => removePurchaseOrderItem(index)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[10px] text-gray-400">數量({item.supplierProduct.unit})</label>
-                          <input type="number" className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm font-bold" value={item.quantity} onChange={(e) => updatePurchaseOrderItem(index, Number(e.target.value), item.unitPrice)} />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-gray-400">單價</label>
-                          <input type="number" className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm font-bold" value={item.unitPrice} onChange={(e) => updatePurchaseOrderItem(index, item.quantity, Number(e.target.value))} />
-                        </div>
+                        <div><label className="text-[10px] text-gray-400">數量({item.supplierProduct.unit})</label><input type="number" className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm font-bold" value={item.quantity} onChange={(e) => updatePurchaseOrderItem(index, Number(e.target.value), item.unitPrice)} /></div>
+                        <div><label className="text-[10px] text-gray-400">單價</label><input type="number" className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm font-bold" value={item.unitPrice} onChange={(e) => updatePurchaseOrderItem(index, item.quantity, Number(e.target.value))} /></div>
                       </div>
                       <p className="text-xs font-black text-red-500 mt-1 text-right">小計：${item.subtotal}</p>
                     </div>
@@ -984,10 +1184,7 @@ export default function AdminPage() {
                   </div>
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">備註</label>
-                <input type="text" placeholder="選填" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newPurchaseOrder.note} onChange={(e) => setNewPurchaseOrder({ ...newPurchaseOrder, note: e.target.value })} />
-              </div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">備註</label><input type="text" placeholder="選填" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newPurchaseOrder.note} onChange={(e) => setNewPurchaseOrder({ ...newPurchaseOrder, note: e.target.value })} /></div>
             </div>
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowAddPurchaseOrderModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
@@ -1028,17 +1225,11 @@ export default function AdminPage() {
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
             <h2 className="text-xl font-bold mb-4 text-gray-800">新增品項</h2>
             <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">品名</label>
-                <input type="text" placeholder="例如：雞排、可樂" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">價格</label>
-                  <input type="number" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">類別</label>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">品名</label><input type="text" placeholder="例如：雞排、可樂" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} /></div>
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">售價</label><input type="number" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} /></div>
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">成本</label><input type="number" placeholder="0" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newProduct.cost || 0} onChange={(e) => setNewProduct({ ...newProduct, cost: Number(e.target.value) })} /></div>
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">類別</label>
                   <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}>
                     <option value="炸物">炸物</option><option value="優惠組合">優惠組合</option><option value="飲料">飲料</option><option value="其他">其他</option>
                   </select>
@@ -1064,25 +1255,15 @@ export default function AdminPage() {
                 <button onClick={() => setNewEntry({ ...newEntry, type: 'expense' })} className={`flex-1 py-2 rounded-lg text-sm font-medium border ${newEntry.type === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200'}`}>支出</button>
               </div>
               {newEntry.type === 'expense' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">支出分類</label>
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">支出分類</label>
                   <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.category} onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value as any })}>
                     <option value="食材">食材</option><option value="人事">人事</option><option value="固定成本">固定成本</option><option value="其他">其他</option>
                   </select>
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">說明</label>
-                <input type="text" placeholder="例如：採買食材、午餐營收" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.description} onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">金額</label>
-                <input type="number" placeholder="請輸入金額" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">日期</label>
-                <input type="date" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} />
-              </div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">說明</label><input type="text" placeholder="例如：採買食材、午餐營收" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.description} onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })} /></div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">金額</label><input type="number" placeholder="請輸入金額" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })} /></div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">日期</label><input type="date" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} /></div>
             </div>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
@@ -1108,66 +1289,26 @@ export default function AdminPage() {
                 </div>
                 {useCustomDateRange && (
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 mb-1">開始日期</label>
-                      <input type="date" className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-gray-400 mb-1">結束日期</label>
-                      <input type="date" className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} />
-                    </div>
+                    <div><label className="block text-[10px] font-bold text-gray-400 mb-1">開始日期</label><input type="date" className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} /></div>
+                    <div><label className="block text-[10px] font-bold text-gray-400 mb-1">結束日期</label><input type="date" className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} /></div>
                   </div>
                 )}
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
-                  <p className="text-[10px] font-bold text-red-400 mb-1">{useCustomDateRange ? '區段營收' : '今日營收'}</p>
-                  <p className="text-lg font-black text-red-600">${useCustomDateRange ? stats.reportRevenue : stats.dailyRevenue}</p>
-                </div>
-                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center">
-                  <p className="text-[10px] font-bold text-orange-400 mb-1">{useCustomDateRange ? '區段支出' : '本週營收'}</p>
-                  <p className="text-lg font-black text-orange-600">${useCustomDateRange ? stats.reportExpense : stats.weeklyRevenue}</p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
-                  <p className="text-[10px] font-bold text-blue-400 mb-1">{useCustomDateRange ? '區段盈餘' : '本月營收'}</p>
-                  <p className="text-lg font-black text-blue-600">${useCustomDateRange ? (stats.reportRevenue - stats.reportExpense) : stats.monthlyRevenue}</p>
-                </div>
+                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center"><p className="text-[10px] font-bold text-red-400 mb-1">{useCustomDateRange ? '區段營收' : '今日營收'}</p><p className="text-lg font-black text-red-600">${useCustomDateRange ? stats.reportRevenue : stats.dailyRevenue}</p></div>
+                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center"><p className="text-[10px] font-bold text-orange-400 mb-1">{useCustomDateRange ? '區段支出' : '本週營收'}</p><p className="text-lg font-black text-orange-600">${useCustomDateRange ? stats.reportExpense : stats.weeklyRevenue}</p></div>
+                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center"><p className="text-[10px] font-bold text-blue-400 mb-1">{useCustomDateRange ? '區段盈餘' : '本月營收'}</p><p className="text-lg font-black text-blue-600">${useCustomDateRange ? (stats.reportRevenue - stats.reportExpense) : stats.monthlyRevenue}</p></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                  <div className="flex items-center gap-2 text-gray-500 mb-2"><User size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段客單價' : '今日客單價'}</span></div>
-                  <p className="text-2xl font-black text-gray-800">${useCustomDateRange ? stats.aov : stats.dailyAov}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">{useCustomDateRange ? '區段' : '今日'}共 {useCustomDateRange ? stats.reportOrderCount : stats.dailyOrderCount} 筆訂單</p>
-                </div>
-                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                  <div className="flex items-center gap-2 text-gray-500 mb-2"><ShoppingBag size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段訂單' : '全月累計訂單'}</span></div>
-                  <p className="text-2xl font-black text-gray-800">{useCustomDateRange ? stats.reportOrderCount : stats.orderCount}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">平均客單價 ${stats.aov}</p>
-                </div>
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100"><div className="flex items-center gap-2 text-gray-500 mb-2"><User size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段客單價' : '今日客單價'}</span></div><p className="text-2xl font-black text-gray-800">${useCustomDateRange ? stats.aov : stats.dailyAov}</p><p className="text-[10px] text-gray-400 mt-1">{useCustomDateRange ? '區段' : '今日'}共 {useCustomDateRange ? stats.reportOrderCount : stats.dailyOrderCount} 筆訂單</p></div>
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100"><div className="flex items-center gap-2 text-gray-500 mb-2"><ShoppingBag size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段訂單' : '全月累計訂單'}</span></div><p className="text-2xl font-black text-gray-800">{useCustomDateRange ? stats.reportOrderCount : stats.orderCount}</p><p className="text-[10px] text-gray-400 mt-1">平均客單價 ${stats.aov}</p></div>
               </div>
               {stats.expensePieData.length > 0 && (
                 <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">
                   <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 px-1"><TrendingDown size={18} className="text-red-500" />支出結構分析</h3>
                   <div className="flex flex-col items-center">
-                    <div className="h-40 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={stats.expensePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                            {stats.expensePieData.map((_, index) => (<Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4]} />))}
-                          </Pie>
-                          <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
-                      {stats.expensePieData.map((item, index) => (
-                        <div key={item.name} className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4] }} />
-                          <span className="text-[10px] font-bold text-gray-600">{item.name}</span>
-                          <span className="text-[10px] font-black text-gray-400">${item.value}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <div className="h-40 w-full"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats.expensePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.expensePieData.map((_, index) => (<Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4]} />))}</Pie><Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} /></PieChart></ResponsiveContainer></div>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">{stats.expensePieData.map((item, index) => (<div key={item.name} className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4] }} /><span className="text-[10px] font-bold text-gray-600">{item.name}</span><span className="text-[10px] font-black text-gray-400">${item.value}</span></div>))}</div>
                   </div>
                 </div>
               )}
@@ -1183,10 +1324,7 @@ export default function AdminPage() {
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-yellow-100 text-yellow-600' : index === 1 ? 'bg-gray-100 text-gray-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>{index + 1}</div>
                           <div><p className="font-bold text-gray-800">{item.name}</p><p className="text-[10px] text-gray-400">售出 {item.quantity} 份</p></div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-black text-red-500">${item.revenue}</p>
-                          <p className="text-[10px] text-gray-400">營收佔比 {Math.round((item.revenue / (stats.monthlyRevenue || 1)) * 100)}%</p>
-                        </div>
+                        <div className="text-right"><p className="font-black text-red-500">${item.revenue}</p><p className="text-[10px] text-gray-400">營收佔比 {Math.round((item.revenue / (stats.monthlyRevenue || 1)) * 100)}%</p></div>
                       </div>
                     ))
                   )}
