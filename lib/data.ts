@@ -5,6 +5,7 @@ export interface Product {
   image?: string;
   category: string;
   isAvailable?: boolean;
+  cost?: number;
 }
 
 export interface Order {
