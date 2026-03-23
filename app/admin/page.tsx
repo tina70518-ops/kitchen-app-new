@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { TrendingUp, TrendingDown, DollarSign, ArrowLeft, Plus, Trash2, ClipboardList, CheckCircle, Lock, ShoppingBag, Minus, BarChart3, User, Phone, Clock, Volume2, VolumeX, BellRing, Settings, Edit2, Save, X, Search, Filter, AlertTriangle, UserCircle } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, ArrowLeft, Plus, Trash2, ClipboardList, CheckCircle, Lock, ShoppingBag, Minus, BarChart3, User, Phone, Clock, Volume2, BellRing, Settings, Edit2, Save, X, Search, AlertTriangle, UserCircle, Package, History } from 'lucide-react';
 import Link from 'next/link';
-import { FinanceEntry, Order, PRODUCTS, Product, DailyClose } from '@/lib/data';
-import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
+import { FinanceEntry, Order, PRODUCTS, Product, DailyClose, SupplierProduct, PurchaseOrder } from '@/lib/data';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userRole, setUserRole] = useState<'boss' | 'staff' | null>(null);
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'pos' | 'orders' | 'finance' | 'menu'>('pos');
+  const [activeTab, setActiveTab] = useState<'pos' | 'orders' | 'finance' | 'menu' | 'purchase'>('pos');
   const [chartView, setChartView] = useState<'day' | 'week' | 'month'>('day');
   const [chartType, setChartType] = useState<'bar' | 'line'>('line');
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
@@ -23,12 +23,7 @@ export default function AdminPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<Product>>({ name: '', price: 0, category: '炸物', isAvailable: true });
-  const [posCart, setPosCart] = useState<{
-    product: Product,
-    quantity: number,
-    spiciness?: '不辣' | '小辣' | '中辣' | '大辣',
-    note?: string
-  }[]>([]);
+  const [posCart, setPosCart] = useState<{ product: Product, quantity: number, spiciness?: '不辣' | '小辣' | '中辣' | '大辣', note?: string }[]>([]);
   const [showPosCart, setShowPosCart] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
@@ -36,6 +31,17 @@ export default function AdminPage() {
   const [menuActiveCategory, setMenuActiveCategory] = useState('全部');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+
+  // 進貨相關 state
+  const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
+  const [showAddSupplierProductModal, setShowAddSupplierProductModal] = useState(false);
+  const [showAddPurchaseOrderModal, setShowAddPurchaseOrderModal] = useState(false);
+  const [showPriceHistoryModal, setShowPriceHistoryModal] = useState(false);
+  const [priceHistories, setPriceHistories] = useState<any[]>([]);
+  const [newSupplierProduct, setNewSupplierProduct] = useState<Partial<SupplierProduct>>({ name: '', supplier: '', unit: 'kg', defaultPrice: 0, category: '食材' });
+  const [newPurchaseOrder, setNewPurchaseOrder] = useState<{ supplier: string, items: { supplierProduct: SupplierProduct, quantity: number, unitPrice: number, subtotal: number }[], note: string }>({ supplier: '', items: [], note: '' });
+  const [activeSupplierTab, setActiveSupplierTab] = useState<'orders' | 'products'>('orders');
 
   const previousOrderCount = useRef(0);
   const isInitialLoad = useRef(true);
@@ -48,9 +54,7 @@ export default function AdminPage() {
   const unlockAndTestAudio = () => {
     setIsAudioLoading(true);
     try {
-      if (!audioObjRef.current) {
-        audioObjRef.current = new Audio(CRAYON_STYLE_URL);
-      }
+      if (!audioObjRef.current) audioObjRef.current = new Audio(CRAYON_STYLE_URL);
       const audio = audioObjRef.current;
       audio.volume = 0.8;
       const playPromise = audio.play();
@@ -59,10 +63,7 @@ export default function AdminPage() {
           setIsSoundEnabled(true);
           isSoundEnabledRef.current = true;
           setIsAudioLoading(false);
-          setTimeout(() => {
-            audio.pause();
-            audio.currentTime = 0;
-          }, 2000);
+          setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 2000);
         }).catch(e => {
           console.error('Playback failed:', e);
           setIsAudioLoading(false);
@@ -81,20 +82,13 @@ export default function AdminPage() {
       const audio = audioObjRef.current;
       audio.currentTime = 0;
       audio.play().then(() => {
-        setTimeout(() => {
-          audio.pause();
-          audio.currentTime = 0;
-        }, 2000);
+        setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 2000);
       }).catch(e => console.warn('Auto-play blocked:', e));
     }
   };
 
   const [newEntry, setNewEntry] = useState<Partial<FinanceEntry>>({
-    type: 'income',
-    category: '食材',
-    amount: 0,
-    description: '',
-    date: new Date().toISOString().split('T')[0],
+    type: 'income', category: '食材', amount: 0, description: '', date: new Date().toISOString().split('T')[0],
   });
 
   useEffect(() => {
@@ -109,10 +103,7 @@ export default function AdminPage() {
               const audio = audioObjRef.current;
               audio.currentTime = 0;
               audio.play().then(() => {
-                setTimeout(() => {
-                  audio.pause();
-                  audio.currentTime = 0;
-                }, 2000);
+                setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 2000);
               }).catch(e => console.warn('Auto-play blocked:', e));
             }
           }
@@ -120,9 +111,7 @@ export default function AdminPage() {
           isInitialLoad.current = false;
           setOrders(orderData);
         }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
+      } catch (error) { console.error('Polling error:', error); }
     };
 
     const fetchAllData = async () => {
@@ -137,13 +126,14 @@ export default function AdminPage() {
         if (Array.isArray(financeData)) setEntries(financeData);
 
         const closeRes = await fetch('/api/daily-close');
-        if (closeRes.ok) {
-          const closeData = await closeRes.json();
-          setDailyCloses(closeData);
-        }
-      } catch (error) {
-        console.error('Fetch all data error:', error);
-      }
+        if (closeRes.ok) { const closeData = await closeRes.json(); setDailyCloses(closeData); }
+
+        const supplierProductRes = await fetch('/api/supplier-products');
+        if (supplierProductRes.ok) { const data = await supplierProductRes.json(); setSupplierProducts(data); }
+
+        const purchaseOrderRes = await fetch('/api/purchase-orders');
+        if (purchaseOrderRes.ok) { const data = await purchaseOrderRes.json(); setPurchaseOrders(data); }
+      } catch (error) { console.error('Fetch all data error:', error); }
     };
 
     fetchOrders();
@@ -154,7 +144,6 @@ export default function AdminPage() {
 
   const income = entries.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
-  const profit = income - expense;
 
   const chartData = useMemo(() => {
     const grouped = entries.reduce((acc, entry) => {
@@ -173,20 +162,12 @@ export default function AdminPage() {
   const stats = useMemo(() => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      return d.toISOString().split('T')[0];
-    });
+    const last7Days = Array.from({ length: 7 }, (_, i) => { const d = new Date(); d.setDate(d.getDate() - i); return d.toISOString().split('T')[0]; });
     const currentMonth = today.slice(0, 7);
     const incomeEntries = entries.filter(e => e.type === 'income');
     const allExpenseEntries = entries.filter(e => e.type === 'expense');
-    const filteredIncome = useCustomDateRange
-      ? incomeEntries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate)
-      : incomeEntries;
-    const filteredExpense = useCustomDateRange
-      ? allExpenseEntries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate)
-      : allExpenseEntries;
+    const filteredIncome = useCustomDateRange ? incomeEntries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate) : incomeEntries;
+    const filteredExpense = useCustomDateRange ? allExpenseEntries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate) : allExpenseEntries;
     const dailyRevenue = incomeEntries.filter(e => e.date === today).reduce((s, e) => s + e.amount, 0);
     const dailyOrderCount = incomeEntries.filter(e => e.date === today).length;
     const weeklyRevenue = incomeEntries.filter(e => last7Days.includes(e.date)).reduce((s, e) => s + e.amount, 0);
@@ -195,28 +176,13 @@ export default function AdminPage() {
     const reportExpense = filteredExpense.reduce((s, e) => s + e.amount, 0);
     const reportOrderCount = filteredIncome.length;
     const productSales: Record<string, { name: string, quantity: number, revenue: number }> = {};
-    filteredIncome.forEach(e => {
-      if (e.items) {
-        e.items.forEach(item => {
-          if (!productSales[item.product.id]) {
-            productSales[item.product.id] = { name: item.product.name, quantity: 0, revenue: 0 };
-          }
-          productSales[item.product.id].quantity += item.quantity;
-          productSales[item.product.id].revenue += item.product.price * item.quantity;
-        });
-      }
-    });
+    filteredIncome.forEach(e => { if (e.items) { e.items.forEach(item => { if (!productSales[item.product.id]) productSales[item.product.id] = { name: item.product.name, quantity: 0, revenue: 0 }; productSales[item.product.id].quantity += item.quantity; productSales[item.product.id].revenue += item.product.price * item.quantity; }); } });
     const ranking = Object.values(productSales).sort((a, b) => b.revenue - a.revenue);
     const aov = reportOrderCount > 0 ? Math.round(reportRevenue / reportOrderCount) : 0;
     const dailyAov = dailyOrderCount > 0 ? Math.round(dailyRevenue / dailyOrderCount) : 0;
     const expenseByCategory: Record<string, number> = { '食材': 0, '人事': 0, '固定成本': 0, '其他': 0 };
-    filteredExpense.forEach(e => {
-      const cat = e.category || '其他';
-      expenseByCategory[cat] = (expenseByCategory[cat] || 0) + e.amount;
-    });
-    const expensePieData = Object.entries(expenseByCategory)
-      .filter(([_, value]) => value > 0)
-      .map(([name, value]) => ({ name, value }));
+    filteredExpense.forEach(e => { const cat = e.category || '其他'; expenseByCategory[cat] = (expenseByCategory[cat] || 0) + e.amount; });
+    const expensePieData = Object.entries(expenseByCategory).filter(([_, value]) => value > 0).map(([name, value]) => ({ name, value }));
     return { dailyRevenue, dailyOrderCount, weeklyRevenue, monthlyRevenue, reportRevenue, reportExpense, reportOrderCount, ranking, aov, dailyAov, orderCount: reportOrderCount, expensePieData };
   }, [entries, reportStartDate, reportEndDate, useCustomDateRange]);
 
@@ -231,13 +197,7 @@ export default function AdminPage() {
   const handleAddEntry = async () => {
     try {
       if (newEntry.amount && newEntry.description) {
-        const entry = {
-          type: newEntry.type as 'income' | 'expense',
-          category: newEntry.type === 'expense' ? newEntry.category : undefined,
-          amount: Number(newEntry.amount),
-          description: newEntry.description,
-          date: newEntry.date
-        };
+        const entry = { type: newEntry.type as 'income' | 'expense', category: newEntry.type === 'expense' ? newEntry.category : undefined, amount: Number(newEntry.amount), description: newEntry.description, date: newEntry.date };
         const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify(entry) });
         if (!res.ok) throw new Error('Finance creation failed');
         const savedEntry = await res.json();
@@ -245,10 +205,7 @@ export default function AdminPage() {
         setShowAddModal(false);
         setNewEntry({ type: 'income', amount: 0, description: '', date: new Date().toISOString().split('T')[0], category: '食材' });
       }
-    } catch (error) {
-      console.error('Add entry error:', error);
-      alert('新增紀錄失敗，請稍後再試！');
-    }
+    } catch (error) { console.error('Add entry error:', error); alert('新增紀錄失敗，請稍後再試！'); }
   };
 
   const handleDailyClose = async () => {
@@ -264,10 +221,7 @@ export default function AdminPage() {
         const savedClose = await res.json();
         setDailyCloses(prev => [...prev, savedClose]);
         alert('關帳成功！');
-      } catch (error) {
-        console.error('Daily close error:', error);
-        alert('關帳失敗，請稍後再試！');
-      }
+      } catch (error) { console.error('Daily close error:', error); alert('關帳失敗，請稍後再試！'); }
     }
   };
 
@@ -277,27 +231,18 @@ export default function AdminPage() {
       const res = await fetch('/api/admin/clear-db', { method: 'POST', body: JSON.stringify({ password: '8888' }) });
       if (res.ok) { alert('數據已成功清空！頁面即將重新整理。'); window.location.reload(); }
       else alert('清空失敗，請確認您的權限。');
-    } catch (error) {
-      console.error('Clear DB error:', error);
-      alert('發生錯誤，請稍後再試。');
-    }
+    } catch (error) { console.error('Clear DB error:', error); alert('發生錯誤，請稍後再試。'); }
   };
 
   const completeOrder = async (order: Order) => {
     try {
-      const financeRes = await fetch('/api/finance', {
-        method: 'POST',
-        body: JSON.stringify({ type: 'income', amount: order.total || 0, description: `訂單收入 #${(order.id || '').slice(-4)}`, items: order.items }),
-      });
+      const financeRes = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: order.total || 0, description: `訂單收入 #${(order.id || '').slice(-4)}`, items: order.items }) });
       if (!financeRes.ok) throw new Error('Finance update failed');
       const savedEntry = await financeRes.json();
       setEntries(prev => [savedEntry, ...prev]);
       const orderRes = await fetch('/api/orders', { method: 'DELETE', body: JSON.stringify({ id: order.id }) });
       if (orderRes.ok) setOrders(prev => prev.filter(o => o.id !== order.id));
-    } catch (error) {
-      console.error('Complete order error:', error);
-      alert('處理訂單失敗，請稍後再試！');
-    }
+    } catch (error) { console.error('Complete order error:', error); alert('處理訂單失敗，請稍後再試！'); }
   };
 
   const updateOrderStatus = async (id: string, status: string) => {
@@ -319,19 +264,13 @@ export default function AdminPage() {
     try {
       const total = posCart.reduce((s, i) => s + i.product.price * i.quantity, 0);
       if (total === 0) return;
-      const res = await fetch('/api/finance', {
-        method: 'POST',
-        body: JSON.stringify({ type: 'income', amount: total, description: `現場點餐收入`, items: posCart.map(i => ({ product: i.product, quantity: i.quantity })) }),
-      });
+      const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: total, description: `現場點餐收入`, items: posCart.map(i => ({ product: i.product, quantity: i.quantity })) }) });
       if (!res.ok) throw new Error('Finance update failed');
       const savedEntry = await res.json();
       setEntries(prev => [savedEntry, ...prev]);
       setPosCart([]);
       setShowPosCart(false);
-    } catch (error) {
-      console.error('POS Checkout error:', error);
-      alert('結帳失敗，請稍後再試！');
-    }
+    } catch (error) { console.error('POS Checkout error:', error); alert('結帳失敗，請稍後再試！'); }
   };
 
   const updatePosCart = (product: Product, delta: number) => {
@@ -384,6 +323,94 @@ export default function AdminPage() {
     if (res.ok) { setProducts(products.filter(p => p.id !== id)); setDeleteConfirmId(null); }
   };
 
+  // 進貨相關 handlers
+  const handleAddSupplierProduct = async () => {
+    if (!newSupplierProduct.name || !newSupplierProduct.supplier) return;
+    const res = await fetch('/api/supplier-products', { method: 'POST', body: JSON.stringify(newSupplierProduct) });
+    if (res.ok) {
+      const saved = await res.json();
+      setSupplierProducts(prev => [...prev, saved]);
+      setShowAddSupplierProductModal(false);
+      setNewSupplierProduct({ name: '', supplier: '', unit: 'kg', defaultPrice: 0, category: '食材' });
+    }
+  };
+
+  const handleDeleteSupplierProduct = async (id: string) => {
+    if (!confirm('確定要刪除這個商品嗎？')) return;
+    const res = await fetch('/api/supplier-products', { method: 'DELETE', body: JSON.stringify({ id }) });
+    if (res.ok) setSupplierProducts(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleAddPurchaseOrder = async () => {
+    if (!newPurchaseOrder.supplier || newPurchaseOrder.items.length === 0) return;
+    const total = newPurchaseOrder.items.reduce((s, i) => s + i.subtotal, 0);
+    const res = await fetch('/api/purchase-orders', { method: 'POST', body: JSON.stringify({ ...newPurchaseOrder, total, date: new Date().toISOString().split('T')[0] }) });
+    if (res.ok) {
+      const saved = await res.json();
+      setPurchaseOrders(prev => [saved, ...prev]);
+      setShowAddPurchaseOrderModal(false);
+      setNewPurchaseOrder({ supplier: '', items: [], note: '' });
+    }
+  };
+
+  const handleCompletePurchaseOrder = async (order: PurchaseOrder) => {
+    if (!confirm(`確定完成這筆進貨單？\n將自動新增支出 $${order.total}`)) return;
+    const res = await fetch('/api/purchase-orders', { method: 'PUT', body: JSON.stringify({ ...order, status: 'completed' }) });
+    if (res.ok) {
+      const updated = await res.json();
+      setPurchaseOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
+      const financeRes = await fetch('/api/finance');
+      if (financeRes.ok) { const financeData = await financeRes.json(); if (Array.isArray(financeData)) setEntries(financeData); }
+      alert('進貨完成！已自動新增支出紀錄。');
+    }
+  };
+
+  const handleDeletePurchaseOrder = async (id: string) => {
+    if (!confirm('確定要刪除這筆進貨單嗎？')) return;
+    const res = await fetch('/api/purchase-orders', { method: 'DELETE', body: JSON.stringify({ id }) });
+    if (res.ok) setPurchaseOrders(prev => prev.filter(o => o.id !== id));
+  };
+
+  const addItemToPurchaseOrder = (product: SupplierProduct) => {
+    const existing = newPurchaseOrder.items.find(i => i.supplierProduct.id === product.id);
+    if (existing) return;
+    setNewPurchaseOrder(prev => ({
+      ...prev,
+      supplier: prev.supplier || product.supplier,
+      items: [...prev.items, { supplierProduct: product, quantity: 1, unitPrice: product.defaultPrice, subtotal: product.defaultPrice }],
+    }));
+  };
+
+  const updatePurchaseOrderItem = (index: number, quantity: number, unitPrice: number) => {
+    setNewPurchaseOrder(prev => ({
+      ...prev,
+      items: prev.items.map((item, i) => i === index ? { ...item, quantity, unitPrice, subtotal: quantity * unitPrice } : item),
+    }));
+  };
+
+  const removePurchaseOrderItem = (index: number) => {
+    setNewPurchaseOrder(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== index) }));
+  };
+
+  const handleViewPriceHistory = async (productId: string) => {
+    const res = await fetch('/api/purchase-orders');
+    if (res.ok) {
+      const orders = await res.json();
+      const histories: any[] = [];
+      orders.forEach((o: PurchaseOrder) => {
+        if (o.status === 'completed') {
+          o.items.forEach(item => {
+            if (item.supplierProduct.id === productId) {
+              histories.push({ date: o.date, unitPrice: item.unitPrice, orderId: o.id });
+            }
+          });
+        }
+      });
+      setPriceHistories(histories.sort((a, b) => b.date.localeCompare(a.date)));
+      setShowPriceHistoryModal(true);
+    }
+  };
+
   const handleLogin = () => {
     if (password === '8888') { setUserRole('boss'); setIsAuthenticated(true); }
     else if (password === '0000') { setUserRole('staff'); setIsAuthenticated(true); }
@@ -419,9 +446,7 @@ export default function AdminPage() {
           </div>
         </div>
         <div className="flex gap-2">
-          <button onClick={handleLogout} className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-500 rounded-full font-bold text-xs shadow-sm border border-gray-100 hover:bg-gray-50 hover:text-red-500 transition-all" title="切換使用者">
-            <UserCircle size={18} />切換
-          </button>
+          <button onClick={handleLogout} className="flex items-center gap-1.5 px-3 py-2 bg-white text-gray-500 rounded-full font-bold text-xs shadow-sm border border-gray-100 hover:bg-gray-50 hover:text-red-500 transition-all"><UserCircle size={18} />切換</button>
           {!isSoundEnabled ? (
             <button onClick={unlockAndTestAudio} disabled={isAudioLoading} className={`flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-full font-bold shadow-lg ${isAudioLoading ? 'opacity-50' : 'animate-bounce'}`}>
               <Volume2 size={18} />{isAudioLoading ? '載入中...' : '啟動音效'}
@@ -435,13 +460,15 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <div className="flex bg-white p-1 rounded-xl mb-6 shadow-sm border border-gray-100">
-        <button onClick={() => setActiveTab('pos')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'pos' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><ShoppingBag size={16} />現場點餐</button>
-        <button onClick={() => setActiveTab('orders')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'orders' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><ClipboardList size={16} />接單 ({orders.length})</button>
-        <button onClick={() => setActiveTab('finance')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'finance' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><DollarSign size={16} />財務</button>
-        <button onClick={() => setActiveTab('menu')} className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'menu' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}>
-          <Settings size={16} />{userRole === 'boss' ? '菜單' : '庫存'}
-        </button>
+      {/* Tab Switcher */}
+      <div className="flex bg-white p-1 rounded-xl mb-6 shadow-sm border border-gray-100 overflow-x-auto gap-1">
+        <button onClick={() => setActiveTab('pos')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'pos' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><ShoppingBag size={14} />點餐</button>
+        <button onClick={() => setActiveTab('orders')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'orders' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><ClipboardList size={14} />接單({orders.length})</button>
+        <button onClick={() => setActiveTab('finance')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'finance' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><DollarSign size={14} />財務</button>
+        <button onClick={() => setActiveTab('menu')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'menu' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><Settings size={14} />{userRole === 'boss' ? '菜單' : '庫存'}</button>
+        {userRole === 'boss' && (
+          <button onClick={() => setActiveTab('purchase')} className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${activeTab === 'purchase' ? 'bg-red-500 text-white shadow-md' : 'text-gray-500'}`}><Package size={14} />進貨</button>
+        )}
       </div>
 
       {activeTab === 'pos' ? (
@@ -465,10 +492,9 @@ export default function AdminPage() {
               );
             })}
           </div>
-
           {posCart.length > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-40">
-              <button onClick={() => setShowPosCart(true)} className="w-full bg-gray-900 text-white py-4 rounded-2xl shadow-2xl flex items-center justify-between px-6 hover:bg-black transition-all animate-in slide-in-from-bottom duration-300">
+              <button onClick={() => setShowPosCart(true)} className="w-full bg-gray-900 text-white py-4 rounded-2xl shadow-2xl flex items-center justify-between px-6 hover:bg-black transition-all">
                 <div className="flex items-center gap-3">
                   <div className="relative">
                     <ShoppingBag size={24} />
@@ -483,11 +509,10 @@ export default function AdminPage() {
               </button>
             </div>
           )}
-
           {showPosCart && (
             <div className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end animate-in fade-in duration-300">
               <div className="absolute inset-0" onClick={() => setShowPosCart(false)} />
-              <div className="bg-white rounded-t-[32px] p-6 max-h-[85vh] overflow-y-auto z-10 animate-in slide-in-from-bottom duration-300 shadow-2xl">
+              <div className="bg-white rounded-t-[32px] p-6 max-h-[85vh] overflow-y-auto z-10 shadow-2xl">
                 <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6" onClick={() => setShowPosCart(false)} />
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-xl font-black text-gray-800 flex items-center gap-2"><ShoppingBag size={24} className="text-red-500" />現場結帳</h3>
@@ -542,10 +567,7 @@ export default function AdminPage() {
         <div className="space-y-4 pb-20">
           <h2 className="font-bold text-gray-800 px-1">待處理訂單</h2>
           {orders.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <ClipboardList className="mx-auto text-gray-300 mb-2" size={48} />
-              <p className="text-gray-400">目前沒有新訂單</p>
-            </div>
+            <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200"><ClipboardList className="mx-auto text-gray-300 mb-2" size={48} /><p className="text-gray-400">目前沒有新訂單</p></div>
           ) : (
             orders.map((order) => (
               <div key={order.id || Math.random().toString()} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
@@ -589,9 +611,7 @@ export default function AdminPage() {
                   ) : (
                     <button onClick={() => completeOrder(order)} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><CheckCircle size={18} />出餐並結帳</button>
                   )}
-                  {userRole === 'boss' && (
-                    <button onClick={() => deleteOrder(order.id)} className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:text-red-500 transition-colors"><Trash2 size={20} /></button>
-                  )}
+                  {userRole === 'boss' && <button onClick={() => deleteOrder(order.id)} className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:text-red-500 transition-colors"><Trash2 size={20} /></button>}
                 </div>
               </div>
             ))
@@ -602,9 +622,7 @@ export default function AdminPage() {
           <div className="flex flex-col gap-4 px-1">
             <div className="flex justify-between items-center">
               <h2 className="font-bold text-gray-800 text-lg">{userRole === 'boss' ? '菜單品項管理' : '品項庫存管理'}</h2>
-              {userRole === 'boss' && (
-                <button onClick={() => setShowAddProductModal(true)} className="flex items-center gap-1 bg-red-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-red-100 font-bold text-sm"><Plus size={18} />新增品項</button>
-              )}
+              {userRole === 'boss' && <button onClick={() => setShowAddProductModal(true)} className="flex items-center gap-1 bg-red-500 text-white px-4 py-2 rounded-xl shadow-lg shadow-red-100 font-bold text-sm"><Plus size={18} />新增品項</button>}
             </div>
             <div className="space-y-3">
               <div className="relative">
@@ -689,6 +707,85 @@ export default function AdminPage() {
             </div>
           )}
         </div>
+      ) : activeTab === 'purchase' ? (
+        <div className="space-y-6 pb-20">
+          <div className="flex bg-white p-1 rounded-xl shadow-sm border border-gray-100">
+            <button onClick={() => setActiveSupplierTab('orders')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeSupplierTab === 'orders' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500'}`}>進貨單</button>
+            <button onClick={() => setActiveSupplierTab('products')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${activeSupplierTab === 'products' ? 'bg-gray-800 text-white shadow-md' : 'text-gray-500'}`}>供應商商品</button>
+          </div>
+
+          {activeSupplierTab === 'products' ? (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <h2 className="font-bold text-gray-800">供應商商品</h2>
+                <button onClick={() => setShowAddSupplierProductModal(true)} className="flex items-center gap-1 bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-red-100"><Plus size={16} />新增商品</button>
+              </div>
+              {supplierProducts.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200"><Package className="mx-auto text-gray-300 mb-2" size={48} /><p className="text-gray-400 text-sm">尚無供應商商品</p></div>
+              ) : (
+                supplierProducts.map(product => (
+                  <div key={product.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full">{product.category}</span>
+                          <span className="text-[10px] font-bold text-gray-400">{product.unit}</span>
+                        </div>
+                        <h4 className="font-bold text-gray-800">{product.name}</h4>
+                        <p className="text-xs text-gray-500 mt-0.5">供應商：{product.supplier}</p>
+                        <p className="text-sm font-black text-red-500 mt-1">預設單價：${product.defaultPrice}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={() => handleViewPriceHistory(product.id)} className="p-2 bg-blue-50 text-blue-500 rounded-xl"><History size={16} /></button>
+                        <button onClick={() => handleDeleteSupplierProduct(product.id)} className="p-2 bg-gray-50 text-gray-400 rounded-xl hover:text-red-500"><Trash2 size={16} /></button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center px-1">
+                <h2 className="font-bold text-gray-800">進貨單</h2>
+                <button onClick={() => setShowAddPurchaseOrderModal(true)} className="flex items-center gap-1 bg-red-500 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-red-100"><Plus size={16} />建立進貨單</button>
+              </div>
+              {purchaseOrders.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-2xl border-2 border-dashed border-gray-200"><ClipboardList className="mx-auto text-gray-300 mb-2" size={48} /><p className="text-gray-400 text-sm">尚無進貨單</p></div>
+              ) : (
+                purchaseOrders.map(order => (
+                  <div key={order.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${order.status === 'completed' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>{order.status === 'completed' ? '已完成' : '草稿'}</span>
+                          <span className="text-[10px] text-gray-400">{order.date}</span>
+                        </div>
+                        <h4 className="font-bold text-gray-800">{order.supplier}</h4>
+                        {order.note && <p className="text-xs text-gray-500 mt-0.5">{order.note}</p>}
+                      </div>
+                      <span className="text-lg font-black text-red-500">${order.total}</span>
+                    </div>
+                    <div className="space-y-2 mb-4">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between text-sm bg-gray-50 p-2 rounded-xl">
+                          <span className="font-bold text-gray-700">{item.supplierProduct.name} x{item.quantity} {item.supplierProduct.unit}</span>
+                          <span className="font-bold text-gray-600">${item.subtotal}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      {order.status === 'draft' && (
+                        <button onClick={() => handleCompletePurchaseOrder(order)} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><CheckCircle size={16} />確認完成進貨</button>
+                      )}
+                      <button onClick={() => handleDeletePurchaseOrder(order.id)} className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:text-red-500"><Trash2 size={18} /></button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="space-y-6">
           {userRole === 'boss' && (
@@ -711,9 +808,9 @@ export default function AdminPage() {
               </button>
               {userRole === 'boss' && (
                 <>
-                  <button onClick={() => setShowSummaryModal(true)} className="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow-lg"><ClipboardList size={16} />營收結報</button>
-                  <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-red-100"><Plus size={16} />新增紀錄</button>
-                  <button onClick={handleClearDatabase} className="flex items-center gap-1 text-sm bg-white text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors" title="清空所有數據"><Trash2 size={16} /></button>
+                  <button onClick={() => setShowSummaryModal(true)} className="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow-lg"><ClipboardList size={16} />結報</button>
+                  <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-red-100"><Plus size={16} />新增</button>
+                  <button onClick={handleClearDatabase} className="flex items-center gap-1 text-sm bg-white text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
                 </>
               )}
             </div>
@@ -771,12 +868,8 @@ export default function AdminPage() {
                   ) : (
                     <AreaChart data={chartData}>
                       <defs>
-                        <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                        </linearGradient>
-                        <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                        </linearGradient>
+                        <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.1}/><stop offset="95%" stopColor="#22c55e" stopOpacity={0}/></linearGradient>
+                        <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ef4444" stopOpacity={0.1}/><stop offset="95%" stopColor="#ef4444" stopOpacity={0}/></linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
                       <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
@@ -797,6 +890,139 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* 新增供應商商品 Modal */}
+      {showAddSupplierProductModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
+            <h2 className="text-xl font-bold mb-4 text-gray-800">新增供應商商品</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">商品名稱</label>
+                <input type="text" placeholder="例如：雞肉、炸油" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.name} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">供應商</label>
+                <input type="text" placeholder="例如：台灣肉品行" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.supplier} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, supplier: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">單位</label>
+                  <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.unit} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, unit: e.target.value as any })}>
+                    <option value="kg">kg</option><option value="桶">桶</option><option value="包">包</option><option value="個">個</option><option value="箱">箱</option><option value="其他">其他</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">預設單價</label>
+                  <input type="number" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newSupplierProduct.defaultPrice} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, defaultPrice: Number(e.target.value) })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">分類</label>
+                <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newSupplierProduct.category} onChange={(e) => setNewSupplierProduct({ ...newSupplierProduct, category: e.target.value as any })}>
+                  <option value="食材">食材</option><option value="包材">包材</option><option value="其他">其他</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowAddSupplierProductModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
+              <button onClick={handleAddSupplierProduct} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-100">確認新增</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 建立進貨單 Modal */}
+      {showAddPurchaseOrderModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm max-h-[85vh] overflow-y-auto animate-in zoom-in duration-200">
+            <h2 className="text-xl font-bold mb-4 text-gray-800">建立進貨單</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">供應商</label>
+                <input type="text" placeholder="供應商名稱" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newPurchaseOrder.supplier} onChange={(e) => setNewPurchaseOrder({ ...newPurchaseOrder, supplier: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-2">選擇商品</label>
+                {supplierProducts.length === 0 ? (
+                  <p className="text-xs text-gray-400 bg-gray-50 p-3 rounded-xl">請先在「供應商商品」新增商品</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                    {supplierProducts.map(p => (
+                      <button key={p.id} onClick={() => addItemToPurchaseOrder(p)}
+                        className={`p-2 rounded-xl text-xs font-bold border text-left transition-all ${newPurchaseOrder.items.find(i => i.supplierProduct.id === p.id) ? 'bg-red-50 border-red-200 text-red-600' : 'bg-gray-50 border-gray-200 text-gray-600'}`}>
+                        {p.name}<br/><span className="font-normal text-gray-400">${p.defaultPrice}/{p.unit}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {newPurchaseOrder.items.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-xs font-medium text-gray-400">商品明細</label>
+                  {newPurchaseOrder.items.map((item, index) => (
+                    <div key={index} className="bg-gray-50 p-3 rounded-xl">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-bold text-gray-700">{item.supplierProduct.name}</span>
+                        <button onClick={() => removePurchaseOrderItem(index)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] text-gray-400">數量({item.supplierProduct.unit})</label>
+                          <input type="number" className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm font-bold" value={item.quantity} onChange={(e) => updatePurchaseOrderItem(index, Number(e.target.value), item.unitPrice)} />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-gray-400">單價</label>
+                          <input type="number" className="w-full px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm font-bold" value={item.unitPrice} onChange={(e) => updatePurchaseOrderItem(index, item.quantity, Number(e.target.value))} />
+                        </div>
+                      </div>
+                      <p className="text-xs font-black text-red-500 mt-1 text-right">小計：${item.subtotal}</p>
+                    </div>
+                  ))}
+                  <div className="bg-red-50 p-3 rounded-xl flex justify-between items-center">
+                    <span className="font-bold text-gray-600">總金額</span>
+                    <span className="text-xl font-black text-red-500">${newPurchaseOrder.items.reduce((s, i) => s + i.subtotal, 0)}</span>
+                  </div>
+                </div>
+              )}
+              <div>
+                <label className="block text-xs font-medium text-gray-400 mb-1">備註</label>
+                <input type="text" placeholder="選填" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newPurchaseOrder.note} onChange={(e) => setNewPurchaseOrder({ ...newPurchaseOrder, note: e.target.value })} />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowAddPurchaseOrderModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
+              <button onClick={handleAddPurchaseOrder} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-100">建立進貨單</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 價格歷史 Modal */}
+      {showPriceHistoryModal && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[32px] w-full max-w-sm p-6 shadow-2xl animate-in zoom-in duration-300">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-black text-gray-800 flex items-center gap-2"><History size={20} className="text-blue-500" />價格歷史</h2>
+              <button onClick={() => setShowPriceHistoryModal(false)} className="text-gray-400 p-2 hover:bg-gray-100 rounded-full"><X size={20} /></button>
+            </div>
+            {priceHistories.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 text-sm">尚無價格歷史</div>
+            ) : (
+              <div className="space-y-2 max-h-80 overflow-y-auto">
+                {priceHistories.map((h, idx) => (
+                  <div key={idx} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                    <span className="text-sm text-gray-500">{h.date}</span>
+                    <span className="font-black text-gray-800">${h.unitPrice}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setShowPriceHistoryModal(false)} className="w-full mt-4 bg-gray-900 text-white py-3 rounded-2xl font-bold">關閉</button>
+          </div>
+        </div>
+      )}
+
+      {/* 新增菜單品項 Modal */}
       {showAddProductModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
@@ -827,6 +1053,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* 新增收支紀錄 Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
@@ -865,6 +1092,7 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* 營收報表 Modal */}
       {showSummaryModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[32px] w-full max-w-md max-h-[85vh] overflow-y-auto p-8 shadow-2xl animate-in zoom-in duration-300">
@@ -901,7 +1129,7 @@ export default function AdminPage() {
                   <p className="text-lg font-black text-orange-600">${useCustomDateRange ? stats.reportExpense : stats.weeklyRevenue}</p>
                 </div>
                 <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
-                  <p className="text-[10px] font-bold text-blue-400 mb-1">${useCustomDateRange ? '區段盈餘' : '本月營收'}</p>
+                  <p className="text-[10px] font-bold text-blue-400 mb-1">{useCustomDateRange ? '區段盈餘' : '本月營收'}</p>
                   <p className="text-lg font-black text-blue-600">${useCustomDateRange ? (stats.reportRevenue - stats.reportExpense) : stats.monthlyRevenue}</p>
                 </div>
               </div>
@@ -953,10 +1181,7 @@ export default function AdminPage() {
                       <div key={item.name} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
                         <div className="flex items-center gap-4">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-yellow-100 text-yellow-600' : index === 1 ? 'bg-gray-100 text-gray-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>{index + 1}</div>
-                          <div>
-                            <p className="font-bold text-gray-800">{item.name}</p>
-                            <p className="text-[10px] text-gray-400">售出 {item.quantity} 份</p>
-                          </div>
+                          <div><p className="font-bold text-gray-800">{item.name}</p><p className="text-[10px] text-gray-400">售出 {item.quantity} 份</p></div>
                         </div>
                         <div className="text-right">
                           <p className="font-black text-red-500">${item.revenue}</p>
