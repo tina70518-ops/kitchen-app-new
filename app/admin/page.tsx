@@ -49,7 +49,8 @@ export default function AdminPage() {
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
   const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-
+const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
+  const [newOrderCount, setNewOrderCount] = useState(0);
   const CRAYON_STYLE_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3';
 
   const unlockAndTestAudio = () => {
