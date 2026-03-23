@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless';
 import {
   Product, Order, FinanceEntry, DailyClose,
+  SupplierProduct, PurchaseOrder, PriceHistory,
   PRODUCTS as MOCK_PRODUCTS,
   financeEntries as MOCK_FINANCE,
   dailyCloses as MOCK_CLOSES,
@@ -51,6 +52,27 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS daily_closes (
       date TEXT PRIMARY KEY,
       data JSONB NOT NULL
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS supplier_products (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS purchase_orders (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await sql`
+    CREATE TABLE IF NOT EXISTS price_histories (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      date TEXT NOT NULL
     )
   `;
   const existing = await sql`SELECT id FROM products LIMIT 1`;
@@ -193,7 +215,7 @@ export async function saveDailyCloses(closes: DailyClose[]) {
     console.error('saveDailyCloses error:', e);
   }
 }
-// SupplierProducts
+
 export async function getSupplierProducts(): Promise<SupplierProduct[]> {
   try {
     const sql = getDb();
@@ -223,7 +245,6 @@ export async function saveSupplierProducts(products: SupplierProduct[]) {
   }
 }
 
-// PurchaseOrders
 export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
   try {
     const sql = getDb();
@@ -253,7 +274,6 @@ export async function savePurchaseOrders(orders: PurchaseOrder[]) {
   }
 }
 
-// PriceHistory
 export async function getPriceHistories(): Promise<PriceHistory[]> {
   try {
     const sql = getDb();
