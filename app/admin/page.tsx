@@ -1399,6 +1399,23 @@ const handleExportReport = () => {
           </div>
         </div>
       )}
+   {/* 新訂單懸浮通知 */}
+      {showNewOrderAlert && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top duration-300">
+          <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[280px]">
+            <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-bounce flex-shrink-0">
+              <BellRing size={20} />
+            </div>
+            <div className="flex-1">
+              <p className="font-black text-base">新訂單來了！🍗</p>
+              <p className="text-gray-400 text-xs mt-0.5">目前共 {newOrderCount} 筆待處理訂單</p>
+            </div>
+            <button onClick={() => { setShowNewOrderAlert(false); setActiveTab('orders'); }} className="bg-red-500 text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap">
+              查看
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
