@@ -108,6 +108,9 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
                 setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 2000);
               }).catch(e => console.warn('Auto-play blocked:', e));
             }
+            setNewOrderCount(orderData.length);
+            setShowNewOrderAlert(true);
+            setTimeout(() => setShowNewOrderAlert(false), 5000);
           }
           previousOrderCount.current = orderData.length;
           isInitialLoad.current = false;
