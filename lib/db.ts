@@ -30,7 +30,8 @@ export async function initDb() {
       price INTEGER NOT NULL,
       category TEXT NOT NULL,
       image TEXT,
-      is_available BOOLEAN DEFAULT true
+      is_available BOOLEAN DEFAULT true,
+      cost INTEGER DEFAULT 0
     )
   `;
   await sql`
