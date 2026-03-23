@@ -108,9 +108,10 @@ useEffect(() => {
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
         const orderData = await orderRes.json();
         
-       if (Array.isArray(orderData)) {
-  if (orderData.length > previousOrderCount.current && !isInitialLoad.current) {
-            // 直接操作 ref，不透過 function
+     if (Array.isArray(orderData)) {
+          console.log('訂單數:', orderData.length, '上次:', previousOrderCount.current, '初始載入:', isInitialLoad.current, '音效:', isSoundEnabledRef.current);
+          if (orderData.length > previousOrderCount.current && !isInitialLoad.current) {
+            console.log('應該要響了！');
             if (isSoundEnabledRef.current && audioObjRef.current) {
               const audio = audioObjRef.current;
               audio.currentTime = 0;
