@@ -58,3 +58,46 @@ export let PRODUCTS: Product[] = [
 export let orders: Order[] = [];
 export let financeEntries: FinanceEntry[] = [];
 export let dailyCloses: DailyClose[] = [];
+// 供應商商品
+export interface SupplierProduct {
+  id: string;
+  name: string;
+  supplier: string;
+  unit: 'kg' | '桶' | '包' | '個' | '箱' | '其他';
+  defaultPrice: number;
+  category: '食材' | '包材' | '其他';
+}
+
+// 進貨單商品項目
+export interface PurchaseOrderItem {
+  supplierProduct: SupplierProduct;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+}
+
+// 進貨單
+export interface PurchaseOrder {
+  id: string;
+  supplier: string;
+  items: PurchaseOrderItem[];
+  total: number;
+  status: 'draft' | 'completed';
+  date: string;
+  createdAt: string;
+  note?: string;
+}
+
+// 價格歷史
+export interface PriceHistory {
+  id: string;
+  supplierProductId: string;
+  supplierProductName: string;
+  unitPrice: number;
+  date: string;
+  purchaseOrderId: string;
+}
+
+export let supplierProducts: SupplierProduct[] = [];
+export let purchaseOrders: PurchaseOrder[] = [];
+export let priceHistories: PriceHistory[] = [];
