@@ -298,6 +298,8 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   };
 
   const completeOrder = async (order: Order) => {
+    // 標記為處理中，防止輪詢重新拉回
+    processingOrderIds.current.add(order.id);
     // 先立即更新畫面
     setOrders(prev => prev.filter(o => o.id !== order.id));
     
@@ -306,12 +308,14 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
       if (!financeRes.ok) throw new Error('Finance update failed');
       const savedEntry = await financeRes.json();
       setEntries(prev => [savedEntry, ...prev]);
-      fetch('/api/orders', { method: 'DELETE', body: JSON.stringify({ id: order.id }) });
+      await fetch('/api/orders', { method: 'DELETE', body: JSON.stringify({ id: order.id }) });
     } catch (error) {
       console.error('Complete order error:', error);
-      // 失敗時把訂單加回來
+      processingOrderIds.current.delete(order.id);
       setOrders(prev => [order, ...prev]);
       alert('處理訂單失敗，請稍後再試！');
+    } finally {
+      processingOrderIds.current.delete(order.id);
     }
   };
 
