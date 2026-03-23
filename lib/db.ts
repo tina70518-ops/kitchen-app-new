@@ -12,7 +12,6 @@ function getDb() {
   return neon(url);
 }
 
-// 初始化資料表（第一次執行時建立）
 export async function initDb() {
   const sql = getDb();
   await sql`
@@ -46,8 +45,6 @@ export async function initDb() {
       data JSONB NOT NULL
     )
   `;
-
-  // 如果 products 是空的，填入預設資料
   const existing = await sql`SELECT id FROM products LIMIT 1`;
   if (existing.length === 0) {
     for (const p of MOCK_PRODUCTS) {
@@ -60,7 +57,6 @@ export async function initDb() {
   }
 }
 
-// Products
 export async function getProducts(): Promise<Product[]> {
   try {
     const sql = getDb();
@@ -101,7 +97,6 @@ export async function saveProducts(products: Product[]) {
   }
 }
 
-// Orders
 export async function getOrders(): Promise<Order[]> {
   try {
     const sql = getDb();
@@ -118,7 +113,6 @@ export async function saveOrders(orders: Order[]) {
   try {
     const sql = getDb();
     await initDb();
-    // 清空並重新寫入
     await sql`DELETE FROM orders`;
     for (const o of orders) {
       await sql`
@@ -129,7 +123,65 @@ export async function saveOrders(orders: Order[]) {
           status = EXCLUDED.status
       `;
     }
-} catch (e) {
+  } catch (e) {
     console.error('saveOrders error:', e);
+  }
+}
+
+export async function getFinanceEntries(): Promise<FinanceEntry[]> {
+  try {
+    const sql = getDb();
+    await initDb();
+    const rows = await sql`SELECT data FROM finance_entries ORDER BY date DESC`;
+    return rows.map((r) => r.data as FinanceEntry);
+  } catch (e) {
+    console.error('getFinanceEntries error:', e);
+    return MOCK_FINANCE;
+  }
+}
+
+export async function saveFinanceEntries(entries: FinanceEntry[]) {
+  try {
+    const sql = getDb();
+    await initDb();
+    await sql`DELETE FROM finance_entries`;
+    for (const e of entries) {
+      await sql`
+        INSERT INTO finance_entries (id, data, date)
+        VALUES (${e.id}, ${JSON.stringify(e)}, ${e.date})
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+      `;
+    }
+  } catch (e) {
+    console.error('saveFinanceEntries error:', e);
+  }
+}
+
+export async function getDailyCloses(): Promise<DailyClose[]> {
+  try {
+    const sql = getDb();
+    await initDb();
+    const rows = await sql`SELECT data FROM daily_closes ORDER BY date DESC`;
+    return rows.map((r) => r.data as DailyClose);
+  } catch (e) {
+    console.error('getDailyCloses error:', e);
+    return MOCK_CLOSES;
+  }
+}
+
+export async function saveDailyCloses(closes: DailyClose[]) {
+  try {
+    const sql = getDb();
+    await initDb();
+    await sql`DELETE FROM daily_closes`;
+    for (const c of closes) {
+      await sql`
+        INSERT INTO daily_closes (date, data)
+        VALUES (${c.date}, ${JSON.stringify(c)})
+        ON CONFLICT (date) DO UPDATE SET data = EXCLUDED.data
+      `;
+    }
+  } catch (e) {
+    console.error('saveDailyCloses error:', e);
   }
 }
