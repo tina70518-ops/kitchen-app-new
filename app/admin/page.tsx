@@ -46,6 +46,7 @@ export default function AdminPage() {
 
   const previousOrderCount = useRef(0);
   const isInitialLoad = useRef(true);
+  const processingOrderIds = useRef<Set<string>>(new Set());
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
   const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
