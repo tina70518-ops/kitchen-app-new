@@ -100,6 +100,7 @@ export async function getProducts(): Promise<Product[]> {
       category: r.category,
       image: r.image ?? undefined,
       isAvailable: r.is_available,
+      cost: r.cost ?? 0,
     }));
   } catch (e) {
     console.error('getProducts error:', e);
