@@ -12,6 +12,14 @@ function getDb() {
   return neon(url);
 }
 
+let dbInitialized = false;
+
+async function ensureDb() {
+  if (dbInitialized) return;
+  await initDb();
+  dbInitialized = true;
+}
+
 export async function initDb() {
   const sql = getDb();
   await sql`
@@ -60,7 +68,7 @@ export async function initDb() {
 export async function getProducts(): Promise<Product[]> {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     const rows = await sql`SELECT * FROM products ORDER BY id`;
     return rows.map((r) => ({
       id: r.id,
@@ -79,7 +87,7 @@ export async function getProducts(): Promise<Product[]> {
 export async function saveProducts(products: Product[]) {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     for (const p of products) {
       await sql`
         INSERT INTO products (id, name, price, category, image, is_available)
@@ -100,7 +108,7 @@ export async function saveProducts(products: Product[]) {
 export async function getOrders(): Promise<Order[]> {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     const rows = await sql`SELECT data FROM orders ORDER BY created_at DESC`;
     return rows.map((r) => r.data as Order);
   } catch (e) {
@@ -112,7 +120,7 @@ export async function getOrders(): Promise<Order[]> {
 export async function saveOrders(orders: Order[]) {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     await sql`DELETE FROM orders`;
     for (const o of orders) {
       await sql`
@@ -131,7 +139,7 @@ export async function saveOrders(orders: Order[]) {
 export async function getFinanceEntries(): Promise<FinanceEntry[]> {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     const rows = await sql`SELECT data FROM finance_entries ORDER BY date DESC`;
     return rows.map((r) => r.data as FinanceEntry);
   } catch (e) {
@@ -143,7 +151,7 @@ export async function getFinanceEntries(): Promise<FinanceEntry[]> {
 export async function saveFinanceEntries(entries: FinanceEntry[]) {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     await sql`DELETE FROM finance_entries`;
     for (const e of entries) {
       await sql`
@@ -160,7 +168,7 @@ export async function saveFinanceEntries(entries: FinanceEntry[]) {
 export async function getDailyCloses(): Promise<DailyClose[]> {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     const rows = await sql`SELECT data FROM daily_closes ORDER BY date DESC`;
     return rows.map((r) => r.data as DailyClose);
   } catch (e) {
@@ -172,7 +180,7 @@ export async function getDailyCloses(): Promise<DailyClose[]> {
 export async function saveDailyCloses(closes: DailyClose[]) {
   try {
     const sql = getDb();
-    await initDb();
+    await ensureDb();
     await sql`DELETE FROM daily_closes`;
     for (const c of closes) {
       await sql`
