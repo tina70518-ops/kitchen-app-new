@@ -465,7 +465,61 @@ export default function AdminPage() {
       setShowPriceHistoryModal(true);
     }
   };
+const handleExportReport = () => {
+    const rows: string[][] = [];
 
+    // 標題
+    rows.push([`九丰炸物專門店 ${reportMonth} 月結報表`]);
+    rows.push([]);
+
+    // 月度總覽
+    rows.push(['=== 月度總覽 ===']);
+    rows.push(['項目', '本月', '上月', '差異']);
+    rows.push(['總收入', `$${reportStats.totalIncome}`, `$${reportStats.prevIncome}`, `$${reportStats.totalIncome - reportStats.prevIncome}`]);
+    rows.push(['總支出', `$${reportStats.totalExpense}`, `$${reportStats.prevExpense}`, `$${reportStats.totalExpense - reportStats.prevExpense}`]);
+    rows.push(['淨利', `$${reportStats.netProfit}`, `$${reportStats.prevProfit}`, `$${reportStats.netProfit - reportStats.prevProfit}`]);
+    rows.push([]);
+
+    // 支出分類
+    rows.push(['=== 支出分類 ===']);
+    rows.push(['分類', '金額']);
+    reportStats.expensePieData.forEach(item => {
+      rows.push([item.name, `$${item.value}`]);
+    });
+    rows.push([]);
+
+    // 菜品毛利分析
+    rows.push(['=== 菜品毛利分析 ===']);
+    rows.push(['品項', '售出數量', '營收', '成本', '毛利', '毛利率']);
+    reportStats.costAnalysis.forEach(item => {
+      rows.push([
+        item.name,
+        String(item.quantity),
+        `$${item.revenue}`,
+        item.cost > 0 ? `$${item.cost}` : '未設定',
+        item.cost > 0 ? `$${item.profit}` : '-',
+        item.cost > 0 ? `${item.margin}%` : '-',
+      ]);
+    });
+    rows.push([]);
+
+    // 每日收支
+    rows.push(['=== 每日收支明細 ===']);
+    rows.push(['日期', '收入', '支出', '淨利']);
+    reportStats.dailyChartData.forEach(day => {
+      rows.push([day.date, `$${day.income}`, `$${day.expense}`, `$${day.income - day.expense}`]);
+    });
+
+    // 轉成 CSV
+    const csvContent = '\uFEFF' + rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `九丰_${reportMonth}_月結報表.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
   const handleLogin = () => {
     if (password === '8888') { setUserRole('boss'); setIsAuthenticated(true); }
     else if (password === '0000') { setUserRole('staff'); setIsAuthenticated(true); }
