@@ -319,8 +319,11 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
       processingOrderIds.current.delete(order.id);
       setOrders(prev => [order, ...prev]);
       alert('處理訂單失敗，請稍後再試！');
-    } finally {
-      processingOrderIds.current.delete(order.id);
+   } finally {
+      // 延遲10秒再清除，確保資料庫已刪除
+      setTimeout(() => {
+        processingOrderIds.current.delete(order.id);
+      }, 10000);
     }
   };
 
