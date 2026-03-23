@@ -297,14 +297,21 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   };
 
   const completeOrder = async (order: Order) => {
+    // 先立即更新畫面
+    setOrders(prev => prev.filter(o => o.id !== order.id));
+    
     try {
       const financeRes = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: order.total || 0, description: `訂單收入 #${(order.id || '').slice(-4)}`, items: order.items }) });
       if (!financeRes.ok) throw new Error('Finance update failed');
       const savedEntry = await financeRes.json();
       setEntries(prev => [savedEntry, ...prev]);
-      const orderRes = await fetch('/api/orders', { method: 'DELETE', body: JSON.stringify({ id: order.id }) });
-      if (orderRes.ok) setOrders(prev => prev.filter(o => o.id !== order.id));
-    } catch (error) { console.error('Complete order error:', error); alert('處理訂單失敗，請稍後再試！'); }
+      fetch('/api/orders', { method: 'DELETE', body: JSON.stringify({ id: order.id }) });
+    } catch (error) {
+      console.error('Complete order error:', error);
+      // 失敗時把訂單加回來
+      setOrders(prev => [order, ...prev]);
+      alert('處理訂單失敗，請稍後再試！');
+    }
   };
 
   const updateOrderStatus = async (id: string, status: string) => {
