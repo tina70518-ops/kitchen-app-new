@@ -722,11 +722,7 @@ const handleExportReport = () => {
                   )}
                 </div>
                 <div className="flex gap-2">
-                  {order.status === 'pending' ? (
-                    <button onClick={() => updateOrderStatus(order.id, 'preparing')} className="flex-1 bg-blue-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600"><Clock size={18} />開始製作</button>
-                  ) : (
-                    <button onClick={() => completeOrder(order)} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><CheckCircle size={18} />出餐並結帳</button>
-                  )}
+                  <button onClick={() => completeOrder(order)} className="flex-1 bg-green-500 text-white py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-green-600"><CheckCircle size={18} />出餐並結帳</button>
                   {userRole === 'boss' && <button onClick={() => deleteOrder(order.id)} className="p-2.5 bg-gray-100 text-gray-400 rounded-xl hover:text-red-500 transition-colors"><Trash2 size={20} /></button>}
                 </div>
               </div>
