@@ -38,6 +38,7 @@ export default function AdminPage() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   
   const previousOrderCount = useRef(0);
+const isInitialLoad = useRef(true);
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
   const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
@@ -107,8 +108,8 @@ useEffect(() => {
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
         const orderData = await orderRes.json();
         
-        if (Array.isArray(orderData)) {
-          if (orderData.length > previousOrderCount.current && previousOrderCount.current !== 0) {
+       if (Array.isArray(orderData)) {
+  if (orderData.length > previousOrderCount.current && !isInitialLoad.current) {
             // 直接操作 ref，不透過 function
             if (isSoundEnabledRef.current && audioObjRef.current) {
               const audio = audioObjRef.current;
@@ -121,7 +122,8 @@ useEffect(() => {
               }).catch(e => console.warn('Auto-play blocked:', e));
             }
           }
-          previousOrderCount.current = orderData.length;
+         previousOrderCount.current = orderData.length;
+          isInitialLoad.current = false;
           setOrders(orderData);
         }
 
