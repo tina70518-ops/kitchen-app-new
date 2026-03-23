@@ -312,9 +312,10 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   };
 
   const completeOrder = async (order: Order) => {
-    // 標記為處理中，防止輪詢重新拉回
+   // 標記為處理中，防止輪詢重新拉回
     processingOrderIds.current.add(order.id);
-    // 先立即更新畫面
+    // 先立即更新畫面，同時更新計數
+    previousOrderCount.current = Math.max(0, previousOrderCount.current - 1);
     setOrders(prev => prev.filter(o => o.id !== order.id));
     
     try {
