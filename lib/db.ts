@@ -114,14 +114,15 @@ export async function saveProducts(products: Product[]) {
     await ensureDb();
     for (const p of products) {
       await sql`
-        INSERT INTO products (id, name, price, category, image, is_available)
-        VALUES (${p.id}, ${p.name}, ${p.price}, ${p.category}, ${p.image ?? null}, ${p.isAvailable ?? true})
+        INSERT INTO products (id, name, price, category, image, is_available, cost)
+        VALUES (${p.id}, ${p.name}, ${p.price}, ${p.category}, ${p.image ?? null}, ${p.isAvailable ?? true}, ${p.cost ?? 0})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name,
           price = EXCLUDED.price,
           category = EXCLUDED.category,
           image = EXCLUDED.image,
-          is_available = EXCLUDED.is_available
+          is_available = EXCLUDED.is_available,
+          cost = EXCLUDED.cost
       `;
     }
   } catch (e) {
