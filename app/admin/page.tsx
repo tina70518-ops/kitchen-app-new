@@ -304,10 +304,11 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
 
   const completeOrder = async (order: Order) => {
    // 標記為處理中，防止輪詢重新拉回
-    processingOrderIds.current.add(order.id);
-    // 先立即更新畫面，同時更新計數
+  processingOrderIds.current.add(order.id);
     previousOrderCount.current = Math.max(0, previousOrderCount.current - 1);
     setOrders(prev => prev.filter(o => o.id !== order.id));
+    // 出餐後關閉通知視窗，避免誤觸發
+    setShowNewOrderAlert(false);
     
     try {
       const financeRes = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: order.total || 0, description: `訂單收入 #${(order.id || '').slice(-4)}`, items: order.items }) });
