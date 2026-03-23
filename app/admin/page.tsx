@@ -115,8 +115,17 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
           }
          // 過濾掉正在處理中的訂單
           const filteredOrders = orderData.filter((o: Order) => !processingOrderIds.current.has(o.id));
-          if (filteredOrders.length > previousOrderCount.current && !isInitialLoad.current) {
-            // 鈴聲邏輯移到這裡
+         if (filteredOrders.length > previousOrderCount.current && !isInitialLoad.current) {
+            if (isSoundEnabledRef.current && audioObjRef.current) {
+              const audio = audioObjRef.current;
+              audio.currentTime = 0;
+              audio.play().then(() => {
+                setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 2000);
+              }).catch(e => console.warn('Auto-play blocked:', e));
+            }
+            setNewOrderCount(filteredOrders.length);
+            setShowNewOrderAlert(true);
+            setTimeout(() => setShowNewOrderAlert(false), 5000);
           }
           previousOrderCount.current = filteredOrders.length;
           isInitialLoad.current = false;
