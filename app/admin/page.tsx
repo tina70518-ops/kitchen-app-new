@@ -39,12 +39,11 @@ export default function AdminPage() {
   
   const previousOrderCount = useRef(0);
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
+  const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   
-  // 使用更穩定的可愛風音效 URL (Mixkit 穩定來源)
   const CRAYON_STYLE_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3';
 
-  // 核心解鎖函數
   const unlockAndTestAudio = () => {
     setIsAudioLoading(true);
     
@@ -56,14 +55,13 @@ export default function AdminPage() {
       const audio = audioObjRef.current;
       audio.volume = 0.8;
       
-      // 確保在載入後播放
       const playPromise = audio.play();
       
       if (playPromise !== undefined) {
         playPromise.then(() => {
           setIsSoundEnabled(true);
+          isSoundEnabledRef.current = true;
           setIsAudioLoading(false);
-          // 播放 2 秒後自動停止
           setTimeout(() => {
             audio.pause();
             audio.currentTime = 0;
@@ -82,7 +80,7 @@ export default function AdminPage() {
   };
 
   const playNotificationSound = () => {
-    if (isSoundEnabled && audioObjRef.current) {
+    if (isSoundEnabledRef.current && audioObjRef.current) {
       const audio = audioObjRef.current;
       audio.currentTime = 0;
       audio.play().then(() => {
@@ -102,7 +100,6 @@ export default function AdminPage() {
     date: new Date().toISOString().split('T')[0],
   });
 
-  // Fetch initial data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -111,7 +108,6 @@ export default function AdminPage() {
         const orderData = await orderRes.json();
         
         if (Array.isArray(orderData)) {
-          // Check for new orders
           if (orderData.length > previousOrderCount.current && previousOrderCount.current !== 0) {
             playNotificationSound();
           }
@@ -142,16 +138,15 @@ export default function AdminPage() {
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 10000);
+    const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
-  }, [isSoundEnabled]);
+  }, []);
 
   const income = entries.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
   const expense = entries.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
   const profit = income - expense;
 
   const chartData = useMemo(() => {
-    // Group by date
     const grouped = entries.reduce((acc, entry) => {
       const date = entry.date;
       if (!acc[date]) acc[date] = { date, income: 0, expense: 0 };
@@ -162,32 +157,26 @@ export default function AdminPage() {
 
     const data = Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
 
-    if (chartView === 'day') return data.slice(-7); // Last 7 days
-    if (chartView === 'week') {
-      // Logic for grouping by week could be added here
-      return data.slice(-14); 
-    }
-    return data; // Month/All
+    if (chartView === 'day') return data.slice(-7);
+    if (chartView === 'week') return data.slice(-14); 
+    return data;
   }, [entries, chartView]);
 
   const stats = useMemo(() => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
     
-    // Get last 7 days for weekly
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
       return d.toISOString().split('T')[0];
     });
 
-    // Get current month prefix
     const currentMonth = today.slice(0, 7);
 
     const incomeEntries = entries.filter(e => e.type === 'income');
     const allExpenseEntries = entries.filter(e => e.type === 'expense');
     
-    // Custom Range Filter
     const filteredIncome = useCustomDateRange 
       ? incomeEntries.filter(e => e.date >= reportStartDate && e.date <= reportEndDate)
       : incomeEntries;
@@ -201,12 +190,10 @@ export default function AdminPage() {
     const weeklyRevenue = incomeEntries.filter(e => last7Days.includes(e.date)).reduce((s, e) => s + e.amount, 0);
     const monthlyRevenue = incomeEntries.filter(e => e.date.startsWith(currentMonth)).reduce((s, e) => s + e.amount, 0);
 
-    // Report specific revenue/expense
     const reportRevenue = filteredIncome.reduce((s, e) => s + e.amount, 0);
     const reportExpense = filteredExpense.reduce((s, e) => s + e.amount, 0);
     const reportOrderCount = filteredIncome.length;
 
-    // Product Ranking (based on filtered range)
     const productSales: Record<string, { name: string, quantity: number, revenue: number }> = {};
     filteredIncome.forEach(e => {
       if (e.items) {
@@ -222,11 +209,9 @@ export default function AdminPage() {
 
     const ranking = Object.values(productSales).sort((a, b) => b.revenue - a.revenue);
 
-    // AOV (Average Order Value)
     const aov = reportOrderCount > 0 ? Math.round(reportRevenue / reportOrderCount) : 0;
     const dailyAov = dailyOrderCount > 0 ? Math.round(dailyRevenue / dailyOrderCount) : 0;
 
-    // Expense breakdown by category (based on filtered range)
     const expenseByCategory: Record<string, number> = {
       '食材': 0,
       '人事': 0,
@@ -274,7 +259,7 @@ export default function AdminPage() {
           category: newEntry.type === 'expense' ? newEntry.category : undefined,
           amount: Number(newEntry.amount),
           description: newEntry.description,
-          date: newEntry.date // Use the date from the state
+          date: newEntry.date
         };
         
         const res = await fetch('/api/finance', {
@@ -354,14 +339,13 @@ export default function AdminPage() {
 
   const completeOrder = async (order: Order) => {
     try {
-      // 1. Add order total to finance entries
       const financeRes = await fetch('/api/finance', {
         method: 'POST',
         body: JSON.stringify({
           type: 'income',
           amount: order.total || 0,
           description: `訂單收入 #${(order.id || '').slice(-4)}`,
-          items: order.items, // Record items for ranking
+          items: order.items,
         }),
       });
       
@@ -370,14 +354,12 @@ export default function AdminPage() {
       const savedEntry = await financeRes.json();
       setEntries(prev => [savedEntry, ...prev]);
 
-      // 2. Remove order from database
       const orderRes = await fetch('/api/orders', {
         method: 'DELETE',
         body: JSON.stringify({ id: order.id }),
       });
 
       if (orderRes.ok) {
-        // 3. Remove order from local state
         setOrders(prev => prev.filter(o => o.id !== order.id));
       }
     } catch (error) {
@@ -427,7 +409,7 @@ export default function AdminPage() {
           type: 'income',
           amount: total,
           description: `現場點餐收入`,
-          items: posCart.map(i => ({ product: i.product, quantity: i.quantity })), // Record items for ranking
+          items: posCart.map(i => ({ product: i.product, quantity: i.quantity })),
         }),
       });
       
@@ -611,7 +593,7 @@ export default function AdminPage() {
                 <BellRing size={20} />
               </button>
               <button 
-                onClick={() => setIsSoundEnabled(false)}
+                onClick={() => { setIsSoundEnabled(false); isSoundEnabledRef.current = false; }}
                 className="p-2 rounded-full shadow-sm bg-green-500 text-white transition-all"
                 title="音效已開啟"
               >
@@ -693,7 +675,6 @@ export default function AdminPage() {
             })}
           </div>
 
-          {/* Floating POS Cart Button */}
           {posCart.length > 0 && (
             <div className="fixed bottom-6 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-40">
               <button
@@ -717,13 +698,9 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* POS Cart Detail Sheet */}
           {showPosCart && (
             <div className="fixed inset-0 bg-black/60 z-50 flex flex-col justify-end animate-in fade-in duration-300">
-              <div 
-                className="absolute inset-0" 
-                onClick={() => setShowPosCart(false)}
-              />
+              <div className="absolute inset-0" onClick={() => setShowPosCart(false)} />
               <div className="bg-white rounded-t-[32px] p-6 max-h-[85vh] overflow-y-auto z-10 animate-in slide-in-from-bottom duration-300 shadow-2xl">
                 <div className="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6" onClick={() => setShowPosCart(false)} />
                 
@@ -732,12 +709,7 @@ export default function AdminPage() {
                     <ShoppingBag size={24} className="text-red-500" />
                     現場結帳
                   </h3>
-                  <button 
-                    onClick={() => setShowPosCart(false)}
-                    className="text-gray-400 font-medium text-sm"
-                  >
-                    關閉
-                  </button>
+                  <button onClick={() => setShowPosCart(false)} className="text-gray-400 font-medium text-sm">關閉</button>
                 </div>
 
                 <div className="space-y-6 mb-8">
@@ -750,17 +722,11 @@ export default function AdminPage() {
                         </div>
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-3 bg-white p-1 rounded-xl border border-gray-100">
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); updatePosCart(item.product, -1); }} 
-                              className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400"
-                            >
+                            <button onClick={(e) => { e.stopPropagation(); updatePosCart(item.product, -1); }} className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400">
                               <Minus size={18}/>
                             </button>
                             <span className="font-black text-gray-800 w-6 text-center">{item.quantity}</span>
-                            <button 
-                              onClick={(e) => { e.stopPropagation(); updatePosCart(item.product, 1); }} 
-                              className="p-1.5 hover:bg-gray-50 rounded-lg text-red-500"
-                            >
+                            <button onClick={(e) => { e.stopPropagation(); updatePosCart(item.product, 1); }} className="p-1.5 hover:bg-gray-50 rounded-lg text-red-500">
                               <Plus size={18}/>
                             </button>
                           </div>
@@ -768,16 +734,13 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* Spiciness Selection */}
                       <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1 scrollbar-hide">
                         {(['不辣', '小辣', '中辣', '大辣'] as const).map((level) => (
                           <button
                             key={level}
                             onClick={() => updatePosCartItemOptions(index, level, item.note || '')}
                             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                              item.spiciness === level
-                                ? 'bg-red-500 text-white shadow-md'
-                                : 'bg-white text-gray-400 border border-gray-200'
+                              item.spiciness === level ? 'bg-red-500 text-white shadow-md' : 'bg-white text-gray-400 border border-gray-200'
                             }`}
                           >
                             {level}
@@ -785,7 +748,6 @@ export default function AdminPage() {
                         ))}
                       </div>
 
-                      {/* Item Note */}
                       <div className="flex items-center gap-2 bg-white px-4 py-3 rounded-xl border border-gray-100">
                         <Settings size={16} className="text-gray-400" />
                         <input
@@ -939,7 +901,6 @@ export default function AdminPage() {
               )}
             </div>
 
-            {/* Search and Filter */}
             <div className="space-y-3">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
@@ -957,9 +918,7 @@ export default function AdminPage() {
                     key={cat}
                     onClick={() => setMenuActiveCategory(cat)}
                     className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${
-                      menuActiveCategory === cat
-                        ? 'bg-gray-800 text-white shadow-md'
-                        : 'bg-white text-gray-500 border border-gray-100'
+                      menuActiveCategory === cat ? 'bg-gray-800 text-white shadow-md' : 'bg-white text-gray-500 border border-gray-100'
                     }`}
                   >
                     {cat}
@@ -1046,7 +1005,6 @@ export default function AdminPage() {
                         <p className="text-base font-black text-red-500">${product.price}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        {/* Availability Toggle */}
                         <button
                           onClick={() => toggleProductAvailability(product)}
                           className={`p-2 rounded-xl transition-all ${product.isAvailable === false ? 'bg-gray-100 text-gray-400' : 'bg-green-50 text-green-600'}`}
@@ -1078,7 +1036,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Delete Confirmation Modal */}
           {deleteConfirmId && (
             <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
               <div className="bg-white rounded-[32px] p-8 w-full max-w-xs text-center shadow-2xl animate-in zoom-in duration-200">
@@ -1090,18 +1047,8 @@ export default function AdminPage() {
                   刪除品項「<span className="font-bold text-gray-700">{products.find(p => p.id === deleteConfirmId)?.name}</span>」後將無法復原。
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setDeleteConfirmId(null)}
-                    className="py-3 bg-gray-100 text-gray-500 font-bold rounded-2xl hover:bg-gray-200 transition-all"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={() => handleDeleteProduct(deleteConfirmId)}
-                    className="py-3 bg-red-500 text-white font-bold rounded-2xl shadow-lg shadow-red-100 hover:bg-red-600 transition-all"
-                  >
-                    確定刪除
-                  </button>
+                  <button onClick={() => setDeleteConfirmId(null)} className="py-3 bg-gray-100 text-gray-500 font-bold rounded-2xl hover:bg-gray-200 transition-all">取消</button>
+                  <button onClick={() => handleDeleteProduct(deleteConfirmId)} className="py-3 bg-red-500 text-white font-bold rounded-2xl shadow-lg shadow-red-100 hover:bg-red-600 transition-all">確定刪除</button>
                 </div>
               </div>
             </div>
@@ -1109,7 +1056,6 @@ export default function AdminPage() {
         </div>
       ) : (
         <div className="space-y-6">
-          {/* Overview Cards */}
           {userRole === 'boss' && (
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
@@ -1148,25 +1094,15 @@ export default function AdminPage() {
               </button>
               {userRole === 'boss' && (
                 <>
-                  <button
-                    onClick={() => setShowSummaryModal(true)}
-                    className="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow-lg"
-                  >
+                  <button onClick={() => setShowSummaryModal(true)} className="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow-lg">
                     <ClipboardList size={16} />
                     營收結報
                   </button>
-                  <button
-                    onClick={() => setShowAddModal(true)}
-                    className="flex items-center gap-1 text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-red-100"
-                  >
+                  <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-red-100">
                     <Plus size={16} />
                     新增紀錄
                   </button>
-                  <button
-                    onClick={handleClearDatabase}
-                    className="flex items-center gap-1 text-sm bg-white text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors"
-                    title="清空所有數據"
-                  >
+                  <button onClick={handleClearDatabase} className="flex items-center gap-1 text-sm bg-white text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors" title="清空所有數據">
                     <Trash2 size={16} />
                   </button>
                 </>
@@ -1213,7 +1149,6 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Chart Section (Boss Only) */}
           {userRole === 'boss' && (
             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-center mb-6">
@@ -1223,26 +1158,12 @@ export default function AdminPage() {
                 </h2>
                 <div className="flex gap-2">
                   <div className="flex bg-gray-100 p-1 rounded-lg">
-                    <button
-                      onClick={() => setChartType('line')}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${chartType === 'line' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}
-                    >
-                      曲線
-                    </button>
-                    <button
-                      onClick={() => setChartType('bar')}
-                      className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${chartType === 'bar' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}
-                    >
-                      直條
-                    </button>
+                    <button onClick={() => setChartType('line')} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${chartType === 'line' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}>曲線</button>
+                    <button onClick={() => setChartType('bar')} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${chartType === 'bar' ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}>直條</button>
                   </div>
                   <div className="flex bg-gray-100 p-1 rounded-lg">
                     {(['day', 'week', 'month'] as const).map((view) => (
-                      <button
-                        key={view}
-                        onClick={() => setChartView(view)}
-                        className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${chartView === view ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}
-                      >
+                      <button key={view} onClick={() => setChartView(view)} className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${chartView === view ? 'bg-white text-red-500 shadow-sm' : 'text-gray-400'}`}>
                         {view === 'day' ? '日' : view === 'week' ? '周' : '月'}
                       </button>
                     ))}
@@ -1255,18 +1176,9 @@ export default function AdminPage() {
                   {chartType === 'bar' ? (
                     <BarChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{fontSize: 10, fill: '#9ca3af'}}
-                        tickFormatter={(val) => val.split('-').slice(1).join('/')}
-                      />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
                       <YAxis hide />
-                      <Tooltip 
-                        cursor={{fill: '#f9fafb'}}
-                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                      />
+                      <Tooltip cursor={{fill: '#f9fafb'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                       <Bar dataKey="income" radius={[4, 4, 0, 0]} fill="#22c55e" barSize={20} />
                       <Bar dataKey="expense" radius={[4, 4, 0, 0]} fill="#ef4444" barSize={20} />
                     </BarChart>
@@ -1283,33 +1195,11 @@ export default function AdminPage() {
                         </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                      <XAxis 
-                        dataKey="date" 
-                        axisLine={false} 
-                        tickLine={false} 
-                        tick={{fontSize: 10, fill: '#9ca3af'}}
-                        tickFormatter={(val) => val.split('-').slice(1).join('/')}
-                      />
+                      <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} tickFormatter={(val) => val.split('-').slice(1).join('/')} />
                       <YAxis hide />
-                      <Tooltip 
-                        contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="income" 
-                        stroke="#22c55e" 
-                        strokeWidth={3}
-                        fillOpacity={1} 
-                        fill="url(#colorIncome)" 
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="expense" 
-                        stroke="#ef4444" 
-                        strokeWidth={3}
-                        fillOpacity={1} 
-                        fill="url(#colorExpense)" 
-                      />
+                      <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                      <Area type="monotone" dataKey="income" stroke="#22c55e" strokeWidth={3} fillOpacity={1} fill="url(#colorIncome)" />
+                      <Area type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorExpense)" />
                     </AreaChart>
                   )}
                 </ResponsiveContainer>
@@ -1329,7 +1219,6 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* Add Product Modal */}
       {showAddProductModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
@@ -1337,31 +1226,16 @@ export default function AdminPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">品名</label>
-                <input
-                  type="text"
-                  placeholder="例如：雞排、可樂"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                  value={newProduct.name}
-                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                />
+                <input type="text" placeholder="例如：雞排、可樂" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newProduct.name} onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">價格</label>
-                  <input
-                    type="number"
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold"
-                    value={newProduct.price}
-                    onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })}
-                  />
+                  <input type="number" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newProduct.price} onChange={(e) => setNewProduct({ ...newProduct, price: Number(e.target.value) })} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">類別</label>
-                  <select
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                  >
+                  <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newProduct.category} onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}>
                     <option value="炸物">炸物</option>
                     <option value="優惠組合">優惠組合</option>
                     <option value="飲料">飲料</option>
@@ -1371,51 +1245,26 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button
-                onClick={() => setShowAddProductModal(false)}
-                className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleAddProduct}
-                className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-100"
-              >
-                確認新增
-              </button>
+              <button onClick={() => setShowAddProductModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
+              <button onClick={handleAddProduct} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-100">確認新增</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Entry Modal */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
             <h2 className="text-xl font-bold mb-4 text-gray-800">新增紀錄</h2>
             <div className="space-y-4">
               <div className="flex gap-2">
-                <button
-                  onClick={() => setNewEntry({ ...newEntry, type: 'income' })}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border ${newEntry.type === 'income' ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-600 border-gray-200'}`}
-                >
-                  收入
-                </button>
-                <button
-                  onClick={() => setNewEntry({ ...newEntry, type: 'expense' })}
-                  className={`flex-1 py-2 rounded-lg text-sm font-medium border ${newEntry.type === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200'}`}
-                >
-                  支出
-                </button>
+                <button onClick={() => setNewEntry({ ...newEntry, type: 'income' })} className={`flex-1 py-2 rounded-lg text-sm font-medium border ${newEntry.type === 'income' ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-600 border-gray-200'}`}>收入</button>
+                <button onClick={() => setNewEntry({ ...newEntry, type: 'expense' })} className={`flex-1 py-2 rounded-lg text-sm font-medium border ${newEntry.type === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200'}`}>支出</button>
               </div>
               {newEntry.type === 'expense' && (
                 <div>
                   <label className="block text-xs font-medium text-gray-400 mb-1">支出分類</label>
-                  <select
-                    className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold"
-                    value={newEntry.category}
-                    onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value as any })}
-                  >
+                  <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.category} onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value as any })}>
                     <option value="食材">食材</option>
                     <option value="人事">人事</option>
                     <option value="固定成本">固定成本</option>
@@ -1425,53 +1274,25 @@ export default function AdminPage() {
               )}
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">說明</label>
-                <input
-                  type="text"
-                  placeholder="例如：採買食材、午餐營收"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                  value={newEntry.description}
-                  onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })}
-                />
+                <input type="text" placeholder="例如：採買食材、午餐營收" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.description} onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">金額</label>
-                <input
-                  type="number"
-                  placeholder="請輸入金額"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold"
-                  value={newEntry.amount}
-                  onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })}
-                />
+                <input type="number" placeholder="請輸入金額" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-400 mb-1">日期</label>
-                <input
-                  type="date"
-                  className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                  value={newEntry.date}
-                  onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })}
-                />
+                <input type="date" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} />
               </div>
             </div>
             <div className="flex gap-3 mt-8">
-              <button
-                onClick={() => setShowAddModal(false)}
-                className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl"
-              >
-                取消
-              </button>
-              <button
-                onClick={handleAddEntry}
-                className="flex-1 py-3 bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-100"
-              >
-                確認新增
-              </button>
+              <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
+              <button onClick={handleAddEntry} className="flex-1 py-3 bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-100">確認新增</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Summary Modal (Daily Close Report) */}
       {showSummaryModal && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[32px] w-full max-w-md max-h-[85vh] overflow-y-auto p-8 shadow-2xl animate-in zoom-in duration-300">
@@ -1486,14 +1307,10 @@ export default function AdminPage() {
             </div>
 
             <div className="space-y-6">
-              {/* Date Range Selector */}
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-bold text-gray-700">報表區段</h3>
-                  <button 
-                    onClick={() => setUseCustomDateRange(!useCustomDateRange)}
-                    className={`text-[10px] font-black px-2 py-1 rounded-md transition-all ${useCustomDateRange ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'}`}
-                  >
+                  <button onClick={() => setUseCustomDateRange(!useCustomDateRange)} className={`text-[10px] font-black px-2 py-1 rounded-md transition-all ${useCustomDateRange ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'}`}>
                     {useCustomDateRange ? '自定義區段' : '預設 (全期)'}
                   </button>
                 </div>
@@ -1501,27 +1318,16 @@ export default function AdminPage() {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 mb-1">開始日期</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500"
-                        value={reportStartDate}
-                        onChange={(e) => setReportStartDate(e.target.value)}
-                      />
+                      <input type="date" className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500" value={reportStartDate} onChange={(e) => setReportStartDate(e.target.value)} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-gray-400 mb-1">結束日期</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500"
-                        value={reportEndDate}
-                        onChange={(e) => setReportEndDate(e.target.value)}
-                      />
+                      <input type="date" className="w-full p-2 bg-white border border-gray-200 rounded-lg text-[10px] font-bold outline-none focus:ring-1 focus:ring-red-500" value={reportEndDate} onChange={(e) => setReportEndDate(e.target.value)} />
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* Revenue Section */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
                   <p className="text-[10px] font-bold text-red-400 mb-1">{useCustomDateRange ? '區段營收' : '今日營收'}</p>
@@ -1537,7 +1343,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* AOV and Order Count */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
                   <div className="flex items-center gap-2 text-gray-500 mb-2">
@@ -1557,7 +1362,6 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              {/* Expense Breakdown Section */}
               {stats.expensePieData.length > 0 && (
                 <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">
                   <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 px-1">
@@ -1568,22 +1372,12 @@ export default function AdminPage() {
                     <div className="h-40 w-full">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={stats.expensePieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={40}
-                            outerRadius={60}
-                            paddingAngle={5}
-                            dataKey="value"
-                          >
+                          <Pie data={stats.expensePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
                             {stats.expensePieData.map((_, index) => (
                               <Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4]} />
                             ))}
                           </Pie>
-                          <Tooltip 
-                            contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                          />
+                          <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -1600,7 +1394,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Product Ranking */}
               <div>
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 px-1">
                   <TrendingUp size={18} className="text-green-500" />
@@ -1637,10 +1430,7 @@ export default function AdminPage() {
                 </div>
               </div>
 
-              <button
-                onClick={() => setShowSummaryModal(false)}
-                className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:bg-black transition-all"
-              >
+              <button onClick={() => setShowSummaryModal(false)} className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl hover:bg-black transition-all">
                 完成檢閱
               </button>
             </div>
