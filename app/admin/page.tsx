@@ -1091,7 +1091,7 @@ const handleExportReport = () => {
                 <>
                   <button onClick={() => setShowSummaryModal(true)} className="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow-lg"><ClipboardList size={16} />結報</button>
                   <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-red-100"><Plus size={16} />新增</button>
-                  <button onClick={handleClearDatabase} className="flex items-center gap-1 text-sm bg-white text-gray-400 border border-gray-200 px-3 py-1.5 rounded-lg hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
+                  
                 </>
               )}
             </div>
