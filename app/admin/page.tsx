@@ -102,9 +102,61 @@ const isInitialLoad = useRef(true);
   });
 
 useEffect(() => {
-    const fetchData = async () => {
+    const fetchOrders = async () => {
       try {
         const orderRes = await fetch('/api/orders');
+        if (!orderRes.ok) throw new Error('Failed to fetch orders');
+        const orderData = await orderRes.json();
+        if (Array.isArray(orderData)) {
+          console.log('訂單數:', orderData.length, '上次:', previousOrderCount.current, '初始載入:', isInitialLoad.current, '音效:', isSoundEnabledRef.current);
+          if (orderData.length > previousOrderCount.current && !isInitialLoad.current) {
+            console.log('應該要響了！');
+            if (isSoundEnabledRef.current && audioObjRef.current) {
+              const audio = audioObjRef.current;
+              audio.currentTime = 0;
+              audio.play().then(() => {
+                setTimeout(() => {
+                  audio.pause();
+                  audio.currentTime = 0;
+                }, 2000);
+              }).catch(e => console.warn('Auto-play blocked:', e));
+            }
+          }
+          previousOrderCount.current = orderData.length;
+          isInitialLoad.current = false;
+          setOrders(orderData);
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    };
+
+    const fetchAllData = async () => {
+      try {
+        const productRes = await fetch('/api/products');
+        const productData = await productRes.json();
+        setProducts(productData);
+
+        const financeRes = await fetch('/api/finance');
+        if (!financeRes.ok) throw new Error('Failed to fetch finance');
+        const financeData = await financeRes.json();
+        if (Array.isArray(financeData)) setEntries(financeData);
+
+        const closeRes = await fetch('/api/daily-close');
+        if (closeRes.ok) {
+          const closeData = await closeRes.json();
+          setDailyCloses(closeData);
+        }
+      } catch (error) {
+        console.error('Fetch all data error:', error);
+      }
+    };
+
+    fetchOrders();
+    fetchAllData();
+    const interval = setInterval(fetchOrders, 3000);
+    return () => clearInterval(interval);
+  }, []);
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
         const orderData = await orderRes.json();
         
