@@ -113,9 +113,14 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
             setShowNewOrderAlert(true);
             setTimeout(() => setShowNewOrderAlert(false), 5000);
           }
-          previousOrderCount.current = orderData.length;
+         // 過濾掉正在處理中的訂單
+          const filteredOrders = orderData.filter((o: Order) => !processingOrderIds.current.has(o.id));
+          if (filteredOrders.length > previousOrderCount.current && !isInitialLoad.current) {
+            // 鈴聲邏輯移到這裡
+          }
+          previousOrderCount.current = filteredOrders.length;
           isInitialLoad.current = false;
-          setOrders(orderData);
+          setOrders(filteredOrders);
         }
       } catch (error) { console.error('Polling error:', error); }
     };
