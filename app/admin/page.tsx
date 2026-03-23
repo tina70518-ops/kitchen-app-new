@@ -100,7 +100,7 @@ export default function AdminPage() {
     date: new Date().toISOString().split('T')[0],
   });
 
-  useEffect(() => {
+useEffect(() => {
     const fetchData = async () => {
       try {
         const orderRes = await fetch('/api/orders');
@@ -109,7 +109,17 @@ export default function AdminPage() {
         
         if (Array.isArray(orderData)) {
           if (orderData.length > previousOrderCount.current && previousOrderCount.current !== 0) {
-            playNotificationSound();
+            // 直接操作 ref，不透過 function
+            if (isSoundEnabledRef.current && audioObjRef.current) {
+              const audio = audioObjRef.current;
+              audio.currentTime = 0;
+              audio.play().then(() => {
+                setTimeout(() => {
+                  audio.pause();
+                  audio.currentTime = 0;
+                }, 2000);
+              }).catch(e => console.warn('Auto-play blocked:', e));
+            }
           }
           previousOrderCount.current = orderData.length;
           setOrders(orderData);
