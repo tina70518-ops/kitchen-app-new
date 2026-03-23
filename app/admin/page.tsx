@@ -926,6 +926,12 @@ const handleExportReport = () => {
             </div>
           </div>
 
+         {/* 匯出按鈕 */}
+          <button onClick={handleExportReport} className="w-full flex items-center justify-center gap-2 bg-gray-800 text-white py-3 rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
+            <FileText size={18} />
+            匯出 {reportMonth} 月報表 (CSV)
+          </button>
+
           {/* 月度總覽 */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-green-50 p-4 rounded-2xl border border-green-100 text-center">
