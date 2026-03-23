@@ -95,27 +95,17 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   });
 
   useEffect(() => {
-    const fetchOrders = async () => {
+   const fetchOrders = async () => {
       try {
         const orderRes = await fetch('/api/orders');
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
         const orderData = await orderRes.json();
         if (Array.isArray(orderData)) {
-          if (orderData.length > previousOrderCount.current && !isInitialLoad.current) {
-            if (isSoundEnabledRef.current && audioObjRef.current) {
-              const audio = audioObjRef.current;
-              audio.currentTime = 0;
-              audio.play().then(() => {
-                setTimeout(() => { audio.pause(); audio.currentTime = 0; }, 2000);
-              }).catch(e => console.warn('Auto-play blocked:', e));
-            }
-            setNewOrderCount(orderData.length);
-            setShowNewOrderAlert(true);
-            setTimeout(() => setShowNewOrderAlert(false), 5000);
-          }
-         // 過濾掉正在處理中的訂單
+          // 過濾掉正在處理中的訂單
           const filteredOrders = orderData.filter((o: Order) => !processingOrderIds.current.has(o.id));
-         if (filteredOrders.length > previousOrderCount.current && !isInitialLoad.current) {
+          
+          // 只有在非初始載入，且訂單數量增加時才通知
+          if (filteredOrders.length > previousOrderCount.current && !isInitialLoad.current) {
             if (isSoundEnabledRef.current && audioObjRef.current) {
               const audio = audioObjRef.current;
               audio.currentTime = 0;
@@ -127,6 +117,7 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
             setShowNewOrderAlert(true);
             setTimeout(() => setShowNewOrderAlert(false), 5000);
           }
+          
           previousOrderCount.current = filteredOrders.length;
           isInitialLoad.current = false;
           setOrders(filteredOrders);
