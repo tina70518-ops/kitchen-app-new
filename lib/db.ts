@@ -129,6 +129,7 @@ export async function saveOrders(orders: Order[]) {
           status = EXCLUDED.status
       `;
     }
-  } catch (e) {
+} catch (e) {
     console.error('saveOrders error:', e);
   }
+}
