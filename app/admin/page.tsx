@@ -263,17 +263,27 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   }, [products, menuSearchTerm, menuActiveCategory]);
 
   const handleAddEntry = async () => {
+    if (!newEntry.amount || !newEntry.description) return;
+    
+    // 先立即關閉 Modal 並清空表單
+    const entry = { type: newEntry.type as 'income' | 'expense', category: newEntry.type === 'expense' ? newEntry.category : undefined, amount: Number(newEntry.amount), description: newEntry.description, date: newEntry.date };
+    const tempEntry = { ...entry, id: 'temp_' + Date.now() };
+    setEntries(prev => [tempEntry as any, ...prev]);
+    setShowAddModal(false);
+    setNewEntry({ type: 'income', amount: 0, description: '', date: new Date().toISOString().split('T')[0], category: '食材' });
+
     try {
-      if (newEntry.amount && newEntry.description) {
-        const entry = { type: newEntry.type as 'income' | 'expense', category: newEntry.type === 'expense' ? newEntry.category : undefined, amount: Number(newEntry.amount), description: newEntry.description, date: newEntry.date };
-        const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify(entry) });
-        if (!res.ok) throw new Error('Finance creation failed');
-        const savedEntry = await res.json();
-        setEntries(prev => [savedEntry, ...prev]);
-        setShowAddModal(false);
-        setNewEntry({ type: 'income', amount: 0, description: '', date: new Date().toISOString().split('T')[0], category: '食材' });
-      }
-    } catch (error) { console.error('Add entry error:', error); alert('新增紀錄失敗，請稍後再試！'); }
+      const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify(entry) });
+      if (!res.ok) throw new Error('Finance creation failed');
+      const savedEntry = await res.json();
+      // 用真實資料替換暫時資料
+      setEntries(prev => prev.map(e => (e as any).id === tempEntry.id ? savedEntry : e));
+    } catch (error) {
+      console.error('Add entry error:', error);
+      // 失敗時移除暫時資料
+      setEntries(prev => prev.filter(e => (e as any).id !== tempEntry.id));
+      alert('新增紀錄失敗，請稍後再試！');
+    }
   };
 
   const handleDailyClose = async () => {
