@@ -193,3 +193,92 @@ export async function saveDailyCloses(closes: DailyClose[]) {
     console.error('saveDailyCloses error:', e);
   }
 }
+// SupplierProducts
+export async function getSupplierProducts(): Promise<SupplierProduct[]> {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    const rows = await sql`SELECT data FROM supplier_products ORDER BY data->>'name'`;
+    return rows.map((r) => r.data as SupplierProduct);
+  } catch (e) {
+    console.error('getSupplierProducts error:', e);
+    return [];
+  }
+}
+
+export async function saveSupplierProducts(products: SupplierProduct[]) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`DELETE FROM supplier_products`;
+    for (const p of products) {
+      await sql`
+        INSERT INTO supplier_products (id, data)
+        VALUES (${p.id}, ${JSON.stringify(p)})
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+      `;
+    }
+  } catch (e) {
+    console.error('saveSupplierProducts error:', e);
+  }
+}
+
+// PurchaseOrders
+export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    const rows = await sql`SELECT data FROM purchase_orders ORDER BY created_at DESC`;
+    return rows.map((r) => r.data as PurchaseOrder);
+  } catch (e) {
+    console.error('getPurchaseOrders error:', e);
+    return [];
+  }
+}
+
+export async function savePurchaseOrders(orders: PurchaseOrder[]) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`DELETE FROM purchase_orders`;
+    for (const o of orders) {
+      await sql`
+        INSERT INTO purchase_orders (id, data, status, created_at)
+        VALUES (${o.id}, ${JSON.stringify(o)}, ${o.status}, ${o.createdAt})
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status
+      `;
+    }
+  } catch (e) {
+    console.error('savePurchaseOrders error:', e);
+  }
+}
+
+// PriceHistory
+export async function getPriceHistories(): Promise<PriceHistory[]> {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    const rows = await sql`SELECT data FROM price_histories ORDER BY date DESC`;
+    return rows.map((r) => r.data as PriceHistory);
+  } catch (e) {
+    console.error('getPriceHistories error:', e);
+    return [];
+  }
+}
+
+export async function savePriceHistories(histories: PriceHistory[]) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`DELETE FROM price_histories`;
+    for (const h of histories) {
+      await sql`
+        INSERT INTO price_histories (id, data, date)
+        VALUES (${h.id}, ${JSON.stringify(h)}, ${h.date})
+        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+      `;
+    }
+  } catch (e) {
+    console.error('savePriceHistories error:', e);
+  }
+}
