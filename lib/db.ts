@@ -177,7 +177,7 @@ export async function saveFinanceEntries(entries: FinanceEntry[]) {
   try {
     const sql = getDb();
     await ensureDb();
-    await sql`DELETE FROM finance_entries`;
+    // 不再先清空，改用 UPSERT 避免資料遺失
     for (const e of entries) {
       await sql`
         INSERT INTO finance_entries (id, data, date)
