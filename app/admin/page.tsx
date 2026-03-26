@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [posCart, setPosCart] = useState<{ product: Product, quantity: number, spiciness?: '不辣' | '小辣' | '中辣' | '大辣', note?: string }[]>([]);
   const [showPosCart, setShowPosCart] = useState(false);
   const [receivedAmount, setReceivedAmount] = useState<string>('');
+  const [detailEntry, setDetailEntry] = useState<FinanceEntry | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
@@ -373,10 +374,23 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
     try {
       const total = posCart.reduce((s, i) => s + i.product.price * i.quantity, 0);
       if (total === 0) return;
-      const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: total, description: `現場點餐收入`, items: posCart.map(i => ({ product: i.product, quantity: i.quantity })) }) });
+      const received = receivedAmount ? parseInt(receivedAmount) : total;
+      const changeDue = Math.max(0, received - total);
+      const checkoutTime = new Date().toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const payload = {
+        type: 'income',
+        amount: total,
+        description: `現場點餐收入`,
+        items: posCart.map(i => ({ product: i.product, quantity: i.quantity })),
+        receivedAmount: received,
+        changeDue,
+        time: checkoutTime,
+      } as any;
+      const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify(payload) });
       if (!res.ok) throw new Error('Finance update failed');
       const savedEntry = await res.json();
-      setEntries(prev => [savedEntry, ...prev]);
+      const localEntry = { ...savedEntry, receivedAmount: received, changeDue, time: checkoutTime } as any;
+      setEntries(prev => [localEntry, ...prev]);
       setPosCart([]);
       setShowPosCart(false);
       setReceivedAmount('');
@@ -1187,25 +1201,101 @@ const handleExportReport = () => {
             {entries.length === 0 ? (
               <div className="text-center py-10 text-gray-400 text-sm">暫無收支紀錄</div>
             ) : (
-              entries.filter(e => userRole === 'boss' || e.date === new Date().toISOString().split('T')[0]).map((entry) => (
-                <div key={entry.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-2 rounded-lg ${entry.type === 'income' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                      {entry.type === 'income' ? <TrendingUp size={18} /> : <TrendingDown size={18} />}
+              entries
+                .filter(e => e.type === 'income' && e.date === new Date().toISOString().split('T')[0])
+                .map((entry) => (
+                  <button
+                    key={entry.id}
+                    onClick={() => setDetailEntry(entry)}
+                    className="w-full text-left bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-lg bg-green-100 text-green-600">
+                        <TrendingUp size={18} />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-800 text-sm">{entry.description}</h4>
+                        <p className="text-[10px] text-gray-400">
+                          {entry.date} {((entry as any).time || '') && <span>· {(entry as any).time}</span>}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-semibold text-gray-800 text-sm">{entry.description}{entry.type === 'expense' && entry.category && <span className="ml-2 text-[10px] font-bold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{entry.category}</span>}</h4>
-                      <p className="text-[10px] text-gray-400">{entry.date}</p>
+                    <div className="flex items-center gap-4">
+                      <span className="font-bold text-sm text-green-600">+${entry.amount}</span>
+                      {userRole === 'boss' && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteEntry(entry.id); }}
+                          className="text-gray-300 hover:text-red-400"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className={`font-bold text-sm ${entry.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{entry.type === 'income' ? '+' : '-'}${entry.amount}</span>
-                    {userRole === 'boss' && <button onClick={() => deleteEntry(entry.id)} className="text-gray-300 hover:text-red-400"><Trash2 size={16} /></button>}
-                  </div>
-                </div>
-              ))
+                  </button>
+                ))
             )}
           </div>
+          
+          {detailEntry && (
+            <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
+              <div className="bg-white rounded-[32px] w-full max-w-sm p-6 shadow-2xl animate-in zoom-in duration-300">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                    <FileText size={20} className="text-red-500" /> 結帳明細
+                  </h2>
+                  <button onClick={() => setDetailEntry(null)} className="text-gray-400 p-2 hover:bg-gray-100 rounded-full">
+                    <X size={20} />
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                    <span className="text-xs text-gray-500 font-medium flex items-center gap-1"><Clock size={14} />日期時間</span>
+                    <span className="text-sm font-bold text-gray-800">
+                      {detailEntry.date} {(detailEntry as any).time ? ` ${ (detailEntry as any).time }` : ''}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center bg-green-50 p-3 rounded-xl border border-green-100">
+                    <span className="text-xs text-green-600 font-medium">應收</span>
+                    <span className="text-lg font-black text-green-600">${detailEntry.amount}</span>
+                  </div>
+                  <div className="flex justify-between items-center bg-blue-50 p-3 rounded-xl border border-blue-100">
+                    <span className="text-xs text-blue-600 font-medium">實收</span>
+                    <span className="text-lg font-black text-blue-600">
+                      ${(detailEntry as any).receivedAmount ?? detailEntry.amount}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center bg-emerald-50 p-3 rounded-xl border border-emerald-100">
+                    <span className="text-xs text-emerald-600 font-medium">找零</span>
+                    <span className="text-lg font-black text-emerald-600">
+                      ${(detailEntry as any).changeDue ?? 0}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-2">品項明細</p>
+                    {detailEntry.items && detailEntry.items.length > 0 ? (
+                      <div className="space-y-2 max-h-56 overflow-y-auto">
+                        {detailEntry.items.map((it, idx) => (
+                          <div key={idx} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                            <div className="flex items-center gap-2 text-sm text-gray-700">
+                              <Package size={14} className="text-gray-400" />
+                              <span className="font-medium">{it.product.name}</span>
+                              <span className="text-xs text-gray-400">x {it.quantity}</span>
+                            </div>
+                            <span className="text-sm font-bold text-gray-800">${it.product.price * it.quantity}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-xs text-gray-400 bg-gray-50 p-4 rounded-xl">無品項資料</div>
+                    )}
+                  </div>
+                </div>
+                <button onClick={() => setDetailEntry(null)} className="w-full mt-4 bg-gray-900 text-white py-3 rounded-2xl font-bold">
+                  關閉
+                </button>
+              </div>
+            </div>
+          )}
           {userRole === 'boss' && (
             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
               <div className="flex justify-between items-center mb-6">
