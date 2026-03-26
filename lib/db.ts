@@ -385,3 +385,27 @@ export async function savePriceHistories(histories: PriceHistory[]) {
     console.error('savePriceHistories error:', e);
   }
 }
+export async function updateOrderStatus(id: string, status: string) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`
+      UPDATE orders
+      SET status = ${status},
+          data = data || jsonb_build_object('status', ${status})
+      WHERE id = ${id}
+    `;
+  } catch (e) {
+    console.error('updateOrderStatus error:', e);
+  }
+}
+
+export async function deleteOrder(id: string) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`DELETE FROM orders WHERE id = ${id}`;
+  } catch (e) {
+    console.error('deleteOrder error:', e);
+  }
+}
