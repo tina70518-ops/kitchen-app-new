@@ -13,13 +13,12 @@ function getDb() {
   return neon(url);
 }
 
-// ✅ 修復：用 Promise 鎖避免競態條件
 let initPromise: Promise<void> | null = null;
 
 async function ensureDb() {
   if (!initPromise) {
     initPromise = initDb().catch((e) => {
-      initPromise = null; // 失敗時重置，允許重試
+      initPromise = null;
       throw e;
     });
   }
@@ -28,7 +27,6 @@ async function ensureDb() {
 
 export async function initDb() {
   const sql = getDb();
-  // 用單一 transaction 建所有表，減少來回次數
   await sql`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
@@ -83,7 +81,6 @@ export async function initDb() {
     )
   `;
 
-  // ✅ 只在真的沒資料時才塞假資料
   const existing = await sql`SELECT id FROM products LIMIT 1`;
   if (existing.length === 0) {
     await saveProducts(MOCK_PRODUCTS);
@@ -116,7 +113,6 @@ export async function saveProducts(products: Product[]) {
     const sql = getDb();
     await ensureDb();
 
-    // ✅ 批次 UPSERT，N 筆只需 1 次 DB 呼叫
     const ids = products.map((p) => p.id);
     const names = products.map((p) => p.name);
     const prices = products.map((p) => p.price);
@@ -161,7 +157,6 @@ export async function getOrders(): Promise<Order[]> {
   }
 }
 
-// ✅ 結帳核心優化：只寫單筆，不再 DELETE 全部訂單
 export async function saveOrder(order: Order) {
   try {
     const sql = getDb();
@@ -178,7 +173,6 @@ export async function saveOrder(order: Order) {
   }
 }
 
-// 保留批次版本供需要時使用（例如資料遷移）
 export async function saveOrders(orders: Order[]) {
   if (orders.length === 0) return;
   try {
@@ -207,6 +201,31 @@ export async function saveOrders(orders: Order[]) {
   }
 }
 
+export async function updateOrderStatus(id: string, status: string) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`
+      UPDATE orders
+      SET status = ${status},
+          data = data || jsonb_build_object('status', ${status})
+      WHERE id = ${id}
+    `;
+  } catch (e) {
+    console.error('updateOrderStatus error:', e);
+  }
+}
+
+export async function deleteOrder(id: string) {
+  try {
+    const sql = getDb();
+    await ensureDb();
+    await sql`DELETE FROM orders WHERE id = ${id}`;
+  } catch (e) {
+    console.error('deleteOrder error:', e);
+  }
+}
+
 export async function getFinanceEntries(): Promise<FinanceEntry[]> {
   try {
     const sql = getDb();
@@ -225,7 +244,6 @@ export async function saveFinanceEntries(entries: FinanceEntry[]) {
     const sql = getDb();
     await ensureDb();
 
-    // ✅ 批次 UPSERT
     const ids = entries.map((e) => e.id);
     const datas = entries.map((e) => JSON.stringify(e));
     const dates = entries.map((e) => e.date);
@@ -383,29 +401,5 @@ export async function savePriceHistories(histories: PriceHistory[]) {
     `;
   } catch (e) {
     console.error('savePriceHistories error:', e);
-  }
-}
-export async function updateOrderStatus(id: string, status: string) {
-  try {
-    const sql = getDb();
-    await ensureDb();
-    await sql`
-      UPDATE orders
-      SET status = ${status},
-          data = data || jsonb_build_object('status', ${status})
-      WHERE id = ${id}
-    `;
-  } catch (e) {
-    console.error('updateOrderStatus error:', e);
-  }
-}
-
-export async function deleteOrder(id: string) {
-  try {
-    const sql = getDb();
-    await ensureDb();
-    await sql`DELETE FROM orders WHERE id = ${id}`;
-  } catch (e) {
-    console.error('deleteOrder error:', e);
   }
 }
