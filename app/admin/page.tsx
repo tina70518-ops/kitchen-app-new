@@ -177,12 +177,11 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
       } catch (error) { console.error('Fetch all data error:', error); }
     };
 
-    fetchOrders();
-    fetchFinance();
-    fetchAllData();
-    const interval = setInterval(() => { fetchOrders(); fetchFinance(); }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+   fetchOrders();
+fetchFinance();
+fetchAllData();
+const interval = setInterval(() => { fetchOrders(); fetchFinance(); }, 3000);
+return () => clearInterval(interval);
 
   const { displayIncome, displayExpense } = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
