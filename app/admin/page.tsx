@@ -134,18 +134,17 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
     };
 
     const fetchFinance = async () => {
-      try {
-        const today = new Date().toISOString().split('T')[0];
-        const financeRes = await fetch(`/api/finance?date=${today}`);
-        if (!financeRes.ok) return;
-        const financeData = await financeRes.json();
-        if (Array.isArray(financeData)) {
-          setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
-        }
-      } catch (e) {
-        console.error('Finance polling error:', e);
-      }
-    };
+  try {
+    const financeRes = await fetch('/api/finance');
+    if (!financeRes.ok) return;
+    const financeData = await financeRes.json();
+    if (Array.isArray(financeData)) {
+      setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
+    }
+  } catch (e) {
+    console.error('Finance polling error:', e);
+  }
+};
 
     const fetchAllData = async () => {
       try {
