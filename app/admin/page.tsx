@@ -98,7 +98,7 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   });
 
   useEffect(() => {
-   const fetchOrders = async () => {
+    const fetchOrders = async () => {
       try {
         const orderRes = await fetch('/api/orders');
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
@@ -134,17 +134,17 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
     };
 
     const fetchFinance = async () => {
-  try {
-    const financeRes = await fetch('/api/finance');
-    if (!financeRes.ok) return;
-    const financeData = await financeRes.json();
-    if (Array.isArray(financeData)) {
-      setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
-    }
-  } catch (e) {
-    console.error('Finance polling error:', e);
-  }
-};
+      try {
+        const financeRes = await fetch('/api/finance');
+        if (!financeRes.ok) return;
+        const financeData = await financeRes.json();
+        if (Array.isArray(financeData)) {
+          setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
+        }
+      } catch (e) {
+        console.error('Finance polling error:', e);
+      }
+    };
 
     const fetchAllData = async () => {
       try {
@@ -177,20 +177,21 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
       } catch (error) { console.error('Fetch all data error:', error); }
     };
 
-   fetchOrders();
-fetchFinance();
-fetchAllData();
-const interval = setInterval(() => { fetchOrders(); fetchFinance(); }, 3000);
-return () => clearInterval(interval);
+    fetchOrders();
+    fetchFinance();
+    fetchAllData();
+    const interval = setInterval(() => { fetchOrders(); fetchFinance(); }, 3000);
+    return () => clearInterval(interval);
+  }, []);
 
   const { displayIncome, displayExpense } = useMemo(() => {
-  const today = new Date().toISOString().split('T')[0];
-  const inRange = (e: FinanceEntry) =>
-    useCustomDateRange ? (e.date >= reportStartDate && e.date <= reportEndDate) : (e.date === today);
-  const inc = entries.filter(e => e.type === 'income' && inRange(e)).reduce((s, e) => s + e.amount, 0);
-  const exp = entries.filter(e => e.type === 'expense' && inRange(e)).reduce((s, e) => s + e.amount, 0);
-  return { displayIncome: inc, displayExpense: exp };
-}, [entries, useCustomDateRange, reportStartDate, reportEndDate]);
+    const today = new Date().toISOString().split('T')[0];
+    const inRange = (e: FinanceEntry) =>
+      useCustomDateRange ? (e.date >= reportStartDate && e.date <= reportEndDate) : (e.date === today);
+    const inc = entries.filter(e => e.type === 'income' && inRange(e)).reduce((s, e) => s + e.amount, 0);
+    const exp = entries.filter(e => e.type === 'expense' && inRange(e)).reduce((s, e) => s + e.amount, 0);
+    return { displayIncome: inc, displayExpense: exp };
+  }, [entries, useCustomDateRange, reportStartDate, reportEndDate]);
 
   const chartData = useMemo(() => {
     const grouped = entries.reduce((acc, entry) => {
@@ -1570,9 +1571,9 @@ const handleExportReport = () => {
         </div>
       )}
 
-            {/* 新增收支紀錄 Modal */}
+      {/* 新增收支紀錄 Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify中心 p-4">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm animate-in zoom-in duration-200">
             <h2 className="text-xl font-bold mb-4 text-gray-800">新增紀錄</h2>
             <div className="space-y-4">
@@ -1581,28 +1582,15 @@ const handleExportReport = () => {
                 <button onClick={() => setNewEntry({ ...newEntry, type: 'expense' })} className={`flex-1 py-2 rounded-lg text-sm font-medium border ${newEntry.type === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-600 border-gray-200'}`}>支出</button>
               </div>
               {newEntry.type === 'expense' && (
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">支出分類</label>
+                <div><label className="block text-xs font-medium text-gray-400 mb-1">支出分類</label>
                   <select className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.category} onChange={(e) => setNewEntry({ ...newEntry, category: e.target.value as any })}>
-                    <option value="食材">食材</option>
-                    <option value="人事">人事</option>
-                    <option value="固定成本">固定成本</option>
-                    <option value="其他">其他</option>
+                    <option value="食材">食材</option><option value="人事">人事</option><option value="固定成本">固定成本</option><option value="其他">其他</option>
                   </select>
                 </div>
               )}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">說明</label>
-                <input type="text" placeholder="例如：採買食材、午餐營收" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.description} onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">金額</label>
-                <input type="number" placeholder="請輸入金額" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">日期</label>
-                <input type="date" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} />
-              </div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">說明</label><input type="text" placeholder="例如：採買食材、午餐營收" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.description} onChange={(e) => setNewEntry({ ...newEntry, description: e.target.value })} /></div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">金額</label><input type="number" placeholder="請輸入金額" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-bold" value={newEntry.amount} onChange={(e) => setNewEntry({ ...newEntry, amount: Number(e.target.value) })} /></div>
+              <div><label className="block text-xs font-medium text-gray-400 mb-1">日期</label><input type="date" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm" value={newEntry.date} onChange={(e) => setNewEntry({ ...newEntry, date: e.target.value })} /></div>
             </div>
             <div className="flex gap-3 mt-8">
               <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 text-gray-500 font-medium hover:bg-gray-50 rounded-xl">取消</button>
@@ -1614,7 +1602,7 @@ const handleExportReport = () => {
 
       {/* 營收報表 Modal */}
       {showSummaryModal && (
-        <div className="fixed inset-0 bg黑/60 z-[100] flex items-center justify中心 p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-white rounded-[32px] w-full max-w-md max-h-[85vh] overflow-y-auto p-8 shadow-2xl animate-in zoom-in duration-300">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2"><BarChart3 size={28} className="text-red-500" />營業數據報表</h2>
@@ -1634,56 +1622,20 @@ const handleExportReport = () => {
                 )}
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
-                  <p className="text-[10px] font-bold text-red-400 mb-1">{useCustomDateRange ? '區段營收' : '今日營收'}</p>
-                  <p className="text-lg font-black text-red-600">${useCustomDateRange ? stats.reportRevenue : stats.dailyRevenue}</p>
-                </div>
-                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center">
-                  <p className="text-[10px] font-bold text-orange-400 mb-1">{useCustomDateRange ? '區段支出' : '本週營收'}</p>
-                  <p className="text-lg font-black text-orange-600">${useCustomDateRange ? stats.reportExpense : stats.weeklyRevenue}</p>
-                </div>
-                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center">
-                  <p className="text-[10px] font-bold text-blue-400 mb-1">{useCustomDateRange ? '區段盈餘' : '本月營收'}</p>
-                  <p className="text-lg font-black text-blue-600">${useCustomDateRange ? (stats.reportRevenue - stats.reportExpense) : stats.monthlyRevenue}</p>
-                </div>
+                <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center"><p className="text-[10px] font-bold text-red-400 mb-1">{useCustomDateRange ? '區段營收' : '今日營收'}</p><p className="text-lg font-black text-red-600">${useCustomDateRange ? stats.reportRevenue : stats.dailyRevenue}</p></div>
+                <div className="bg-orange-50 p-4 rounded-2xl border border-orange-100 text-center"><p className="text-[10px] font-bold text-orange-400 mb-1">{useCustomDateRange ? '區段支出' : '本週營收'}</p><p className="text-lg font-black text-orange-600">${useCustomDateRange ? stats.reportExpense : stats.weeklyRevenue}</p></div>
+                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-center"><p className="text-[10px] font-bold text-blue-400 mb-1">{useCustomDateRange ? '區段盈餘' : '本月營收'}</p><p className="text-lg font-black text-blue-600">${useCustomDateRange ? (stats.reportRevenue - stats.reportExpense) : stats.monthlyRevenue}</p></div>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                  <div className="flex items-center gap-2 text-gray-500 mb-2"><User size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段客單價' : '今日客單價'}</span></div>
-                  <p className="text-2xl font-black text-gray-800">${useCustomDateRange ? stats.aov : stats.dailyAov}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">{useCustomDateRange ? '區段' : '今日'}共 {useCustomDateRange ? stats.reportOrderCount : stats.dailyOrderCount} 筆訂單</p>
-                </div>
-                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                  <div className="flex items-center gap-2 text-gray-500 mb-2"><ShoppingBag size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段訂單' : '全月累計訂單'}</span></div>
-                  <p className="text-2xl font-black text-gray-800">{useCustomDateRange ? stats.reportOrderCount : stats.orderCount}</p>
-                  <p className="text-[10px] text-gray-400 mt-1">平均客單價 ${stats.aov}</p>
-                </div>
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100"><div className="flex items-center gap-2 text-gray-500 mb-2"><User size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段客單價' : '今日客單價'}</span></div><p className="text-2xl font-black text-gray-800">${useCustomDateRange ? stats.aov : stats.dailyAov}</p><p className="text-[10px] text-gray-400 mt-1">{useCustomDateRange ? '區段' : '今日'}共 {useCustomDateRange ? stats.reportOrderCount : stats.dailyOrderCount} 筆訂單</p></div>
+                <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100"><div className="flex items-center gap-2 text-gray-500 mb-2"><ShoppingBag size={16} /><span className="text-xs font-bold">{useCustomDateRange ? '區段訂單' : '全月累計訂單'}</span></div><p className="text-2xl font-black text-gray-800">{useCustomDateRange ? stats.reportOrderCount : stats.orderCount}</p><p className="text-[10px] text-gray-400 mt-1">平均客單價 ${stats.aov}</p></div>
               </div>
               {stats.expensePieData.length > 0 && (
                 <div className="bg-gray-50 p-5 rounded-3xl border border-gray-100">
                   <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 px-1"><TrendingDown size={18} className="text-red-500" />支出結構分析</h3>
                   <div className="flex flex-col items-center">
-                    <div className="h-40 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={stats.expensePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                            {stats.expensePieData.map((_, index) => (
-                              <Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4]} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
-                      {stats.expensePieData.map((item, index) => (
-                        <div key={item.name} className="flex items-center gap-2">
-                          <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4] }} />
-                          <span className="text-[10px] font-bold text-gray-600">{item.name}</span>
-                          <span className="text-[10px] font-black text-gray-400">${item.value}</span>
-                        </div>
-                      ))}
-                    </div>
+                    <div className="h-40 w-full"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={stats.expensePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">{stats.expensePieData.map((_, index) => (<Cell key={`cell-${index}`} fill={['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4]} />))}</Pie><Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} /></PieChart></ResponsiveContainer></div>
+                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">{stats.expensePieData.map((item, index) => (<div key={item.name} className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: ['#ef4444', '#f97316', '#8b5cf6', '#6b7280'][index % 4] }} /><span className="text-[10px] font-bold text-gray-600">{item.name}</span><span className="text-[10px] font-black text-gray-400">${item.value}</span></div>))}</div>
                   </div>
                 </div>
               )}
@@ -1691,23 +1643,15 @@ const handleExportReport = () => {
                 <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2 px-1"><TrendingUp size={18} className="text-green-500" />本月銷售排行 (依營收)</h3>
                 <div className="space-y-2">
                   {stats.ranking.length === 0 ? (
-                    <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                      <p className="text-sm text-gray-400">尚無銷售數據</p>
-                    </div>
+                    <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200"><p className="text-sm text-gray-400">尚無銷售數據</p></div>
                   ) : (
                     stats.ranking.slice(0, 5).map((item, index) => (
                       <div key={item.name} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
                         <div className="flex items-center gap-4">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font黑 text-sm ${index === 0 ? 'bg-yellow-100 text-yellow-600' : index === 1 ? 'bg-gray-100 text-gray-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>{index + 1}</div>
-                          <div>
-                            <p className="font-bold text-gray-800">{item.name}</p>
-                            <p className="text-[10px] text-gray-400">售出 {item.quantity} 份</p>
-                          </div>
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-yellow-100 text-yellow-600' : index === 1 ? 'bg-gray-100 text-gray-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-gray-50 text-gray-400'}`}>{index + 1}</div>
+                          <div><p className="font-bold text-gray-800">{item.name}</p><p className="text-[10px] text-gray-400">售出 {item.quantity} 份</p></div>
                         </div>
-                        <div className="text-right">
-                          <p className="font黑 text-red-500">${item.revenue}</p>
-                          <p className="text-[10px] text-gray-400">營收佔比 {Math.round((item.revenue / (stats.monthlyRevenue || 1)) * 100)}%</p>
-                        </div>
+                        <div className="text-right"><p className="font-black text-red-500">${item.revenue}</p><p className="text-[10px] text-gray-400">營收佔比 {Math.round((item.revenue / (stats.monthlyRevenue || 1)) * 100)}%</p></div>
                       </div>
                     ))
                   )}
@@ -1718,27 +1662,26 @@ const handleExportReport = () => {
           </div>
         </div>
       )}
-
-      {/* 新訂單懸浮通知 */}
-      {showNewOrderAlert && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top duration-300">
-          <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[280px]">
-            <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-bounce flex-shrink-0">
-              <BellRing size={20} />
-            </div>
-            <div className="flex-1">
-              <p className="font-bold text-base">新訂單來了！🍗</p>
-              <p className="text-gray-400 text-xs mt-0.5">目前共 {newOrderCount} 筆待處理訂單</p>
-            </div>
-            <button
-              onClick={() => { setShowNewOrderAlert(false); setActiveTab('orders'); }}
-              className="bg-red-500 text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap"
-            >
-              查看
-            </button>
-          </div>
-        </div>
-      )}
-    </main>
-  );
+  {/* 新訂單懸浮通知 */}
+{showNewOrderAlert && (
+  <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top duration-300">
+    <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[280px]">
+      <div className="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-bounce flex-shrink-0">
+        <BellRing size={20} />
+      </div>
+      <div className="flex-1">
+        <p className="font-black text-base">新訂單來了！🍗</p>
+        <p className="text-gray-400 text-xs mt-0.5">目前共 {newOrderCount} 筆待處理訂單</p>
+      </div>
+      <button
+        onClick={() => { setShowNewOrderAlert(false); setActiveTab('orders'); }}
+        className="bg-red-500 text-white text-xs font-bold px-3 py-2 rounded-xl whitespace-nowrap"
+      >
+        查看
+      </button>
+    </div>
+  </div>
+)}
+</main>
+);
 }
