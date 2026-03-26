@@ -133,6 +133,20 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
       } catch (error) { console.error('Polling error:', error); }
     };
 
+    const fetchFinance = async () => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const financeRes = await fetch(`/api/finance?date=${today}`);
+        if (!financeRes.ok) return;
+        const financeData = await financeRes.json();
+        if (Array.isArray(financeData)) {
+          setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
+        }
+      } catch (e) {
+        console.error('Finance polling error:', e);
+      }
+    };
+
     const fetchAllData = async () => {
       try {
         const productRes = await fetch('/api/products');
@@ -165,13 +179,19 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
     };
 
     fetchOrders();
+    fetchFinance();
     fetchAllData();
-    const interval = setInterval(fetchOrders, 3000);
+    const interval = setInterval(() => { fetchOrders(); fetchFinance(); }, 3000);
     return () => clearInterval(interval);
   }, []);
 
-  const income = entries.filter(e => e.type === 'income').reduce((s, e) => s + e.amount, 0);
-  const expense = entries.filter(e => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
+  const { displayIncome, displayExpense } = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const inRange = (e: FinanceEntry) => useCustomDateRange ? (e.date >= reportStartDate && e.date <= reportEndDate) : (e.date === today);
+    const inc = entries.filter(e => e.type === 'income' && inRange(e)).reduce((s, e) => s + e.amount, 0);
+    const exp = entries.filter(e => e.type === 'expense' && inRange(e)).reduce((s, e) => s + e.amount, 0);
+    return { displayIncome: inc, displayExpense: exp };
+  }, [entries, useCustomDateRange, reportStartDate, reportEndDate]);
 
   const chartData = useMemo(() => {
     const grouped = entries.reduce((acc, entry) => {
@@ -1193,11 +1213,11 @@ const handleExportReport = () => {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-green-50 p-4 rounded-2xl border border-green-100">
                 <div className="flex items-center gap-2 text-green-600 mb-1"><TrendingUp size={16} /><span className="text-xs font-medium">總收入</span></div>
-                <p className="text-2xl font-bold text-green-700">${income}</p>
+                <p className="text-2xl font-bold text-green-700">${displayIncome}</p>
               </div>
               <div className="bg-red-50 p-4 rounded-2xl border border-red-100">
                 <div className="flex items-center gap-2 text-red-600 mb-1"><TrendingDown size={16} /><span className="text-xs font-medium">總支出</span></div>
-                <p className="text-2xl font-bold text-red-700">${expense}</p>
+                <p className="text-2xl font-bold text-red-700">${displayExpense}</p>
               </div>
             </div>
           )}
