@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, ArrowLeft, Plus, Trash2, ClipboardList, CheckCircle, Lock, ShoppingBag, Minus, BarChart3, User, Phone, Clock, Volume2, BellRing, Settings, Edit2, Save, X, Search, AlertTriangle, UserCircle, Package, History, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { FinanceEntry, Order, PRODUCTS, Product, DailyClose, SupplierProduct, PurchaseOrder } from '@/lib/data';
@@ -384,18 +384,21 @@ export default function AdminPage() {
     } catch (error) { console.error('POS Checkout error:', error); alert('結帳失敗，請稍後再試！'); }
   };
 
-  const updatePosCart = (product: Product, delta: number) => {
+  // ✅ 優化：使用 useCallback 避免每次渲染都產生新的函式參考
+  const updatePosCart = useCallback((product: Product, delta: number) => {
     setPosCart(prev => {
       const existing = prev.find(i => i.product.id === product.id);
-      if (existing) return prev.map(i => i.product.id === product.id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0);
+      if (existing) {
+        return prev.map(i => i.product.id === product.id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i).filter(i => i.quantity > 0);
+      }
       if (delta > 0) return [...prev, { product, quantity: 1, spiciness: '不辣', note: '' }];
       return prev;
     });
-  };
+  }, []);
 
-  const updatePosCartItemOptions = (index: number, spiciness: '不辣' | '小辣' | '中辣' | '大辣', note: string) => {
+  const updatePosCartItemOptions = useCallback((index: number, spiciness: '不辣' | '小辣' | '中辣' | '大辣', note: string) => {
     setPosCart(prev => prev.map((item, i) => i === index ? { ...item, spiciness, note } : item));
-  };
+  }, []);
 
   const deleteEntry = async (id: string) => {
     try {
