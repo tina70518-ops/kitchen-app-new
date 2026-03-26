@@ -47,7 +47,6 @@ export interface DailyClose {
   closedAt: string
 }
 
-// Mock Data
 export let PRODUCTS: Product[] = [
   { id: '1', name: '雞排', price: 55, category: '炸物', isAvailable: true },
   { id: '2', name: '腿塊', price: 30, category: '炸物', isAvailable: true },
