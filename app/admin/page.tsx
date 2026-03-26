@@ -50,7 +50,7 @@ export default function AdminPage() {
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
   const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
+  const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
   const CRAYON_STYLE_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3';
 
@@ -95,7 +95,7 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   });
 
   useEffect(() => {
-   const fetchOrders = async () => {
+    const fetchOrders = async () => {
       try {
         const orderRes = await fetch('/api/orders');
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
@@ -120,7 +120,12 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
           
           previousOrderCount.current = filteredOrders.length;
           isInitialLoad.current = false;
-          setOrders(filteredOrders);
+          
+          // ✅ 效能優化 1：只有當訂單資料真的有變動時，才更新 state，避免每 3 秒全畫面重新渲染
+          setOrders(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(filteredOrders)) return prev;
+            return filteredOrders;
+          });
         }
       } catch (error) { console.error('Polling error:', error); }
     };
@@ -129,21 +134,33 @@ const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
       try {
         const productRes = await fetch('/api/products');
         const productData = await productRes.json();
-        setProducts(productData);
+        // ✅ 效能優化 2：同樣防止不必要的重新渲染
+        setProducts(prev => JSON.stringify(prev) === JSON.stringify(productData) ? prev : productData);
 
         const financeRes = await fetch('/api/finance');
         if (!financeRes.ok) throw new Error('Failed to fetch finance');
         const financeData = await financeRes.json();
-        if (Array.isArray(financeData)) setEntries(financeData);
+        if (Array.isArray(financeData)) {
+            setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
+        }
 
         const closeRes = await fetch('/api/daily-close');
-        if (closeRes.ok) { const closeData = await closeRes.json(); setDailyCloses(closeData); }
+        if (closeRes.ok) { 
+          const closeData = await closeRes.json(); 
+          setDailyCloses(prev => JSON.stringify(prev) === JSON.stringify(closeData) ? prev : closeData); 
+        }
 
         const supplierProductRes = await fetch('/api/supplier-products');
-        if (supplierProductRes.ok) { const data = await supplierProductRes.json(); setSupplierProducts(data); }
+        if (supplierProductRes.ok) { 
+          const data = await supplierProductRes.json(); 
+          setSupplierProducts(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data); 
+        }
 
         const purchaseOrderRes = await fetch('/api/purchase-orders');
-        if (purchaseOrderRes.ok) { const data = await purchaseOrderRes.json(); setPurchaseOrders(data); }
+        if (purchaseOrderRes.ok) { 
+          const data = await purchaseOrderRes.json(); 
+          setPurchaseOrders(prev => JSON.stringify(prev) === JSON.stringify(data) ? prev : data); 
+        }
       } catch (error) { console.error('Fetch all data error:', error); }
     };
 
