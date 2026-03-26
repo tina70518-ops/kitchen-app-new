@@ -25,6 +25,7 @@ export default function AdminPage() {
   const [newProduct, setNewProduct] = useState<Partial<Product>>({ name: '', price: 0, category: '炸物', isAvailable: true, cost: 0 });
   const [posCart, setPosCart] = useState<{ product: Product, quantity: number, spiciness?: '不辣' | '小辣' | '中辣' | '大辣', note?: string }[]>([]);
   const [showPosCart, setShowPosCart] = useState(false);
+  const [receivedAmount, setReceivedAmount] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
@@ -50,7 +51,7 @@ export default function AdminPage() {
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
   const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
+const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
   const CRAYON_STYLE_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3';
 
@@ -95,7 +96,7 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    const fetchOrders = async () => {
+   const fetchOrders = async () => {
       try {
         const orderRes = await fetch('/api/orders');
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
@@ -121,7 +122,7 @@ export default function AdminPage() {
           previousOrderCount.current = filteredOrders.length;
           isInitialLoad.current = false;
           
-          // ✅ 效能優化 1：只有當訂單資料真的有變動時，才更新 state，避免每 3 秒全畫面重新渲染
+          // 效能優化：只有當訂單資料真的有變動時，才更新 state 避免每 3 秒全畫面重新渲染
           setOrders(prev => {
             if (JSON.stringify(prev) === JSON.stringify(filteredOrders)) return prev;
             return filteredOrders;
@@ -134,15 +135,12 @@ export default function AdminPage() {
       try {
         const productRes = await fetch('/api/products');
         const productData = await productRes.json();
-        // ✅ 效能優化 2：同樣防止不必要的重新渲染
         setProducts(prev => JSON.stringify(prev) === JSON.stringify(productData) ? prev : productData);
 
         const financeRes = await fetch('/api/finance');
         if (!financeRes.ok) throw new Error('Failed to fetch finance');
         const financeData = await financeRes.json();
-        if (Array.isArray(financeData)) {
-            setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
-        }
+        if (Array.isArray(financeData)) setEntries(prev => JSON.stringify(prev) === JSON.stringify(financeData) ? prev : financeData);
 
         const closeRes = await fetch('/api/daily-close');
         if (closeRes.ok) { 
@@ -381,6 +379,7 @@ export default function AdminPage() {
       setEntries(prev => [savedEntry, ...prev]);
       setPosCart([]);
       setShowPosCart(false);
+      setReceivedAmount('');
     } catch (error) { console.error('POS Checkout error:', error); alert('結帳失敗，請稍後再試！'); }
   };
 
@@ -718,12 +717,48 @@ const handleExportReport = () => {
                     </div>
                   ))}
                 </div>
-                <div className="bg-red-50 rounded-2xl p-4 mb-6">
-                  <div className="flex justify-between items-center">
+                <div className="bg-red-50 rounded-2xl p-4 mb-4">
+                  <div className="flex justify-between items-center mb-3">
                     <span className="font-bold text-gray-600">應收金額</span>
                     <span className="text-3xl font-black text-red-500">${posCart.reduce((s, i) => s + i.product.price * i.quantity, 0)}</span>
                   </div>
+                  <div className="flex justify-between items-center mb-3 border-t border-red-100 pt-3">
+                    <span className="font-bold text-gray-600">實收金額</span>
+                    <span className="text-2xl font-black text-blue-500">${receivedAmount || '0'}</span>
+                  </div>
+                  <div className="flex justify-between items-center border-t border-red-100 pt-3">
+                    <span className="font-bold text-gray-600">找零</span>
+                    <span className={`text-2xl font-black ${(receivedAmount ? parseInt(receivedAmount) : 0) - posCart.reduce((s, i) => s + i.product.price * i.quantity, 0) >= 0 ? 'text-green-500' : 'text-gray-400'}`}>
+                      ${Math.max(0, (receivedAmount ? parseInt(receivedAmount) : 0) - posCart.reduce((s, i) => s + i.product.price * i.quantity, 0))}
+                    </span>
+                  </div>
                 </div>
+
+                <div className="grid grid-cols-3 gap-2 mb-6">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 'C', 0, '←'].map((key) => (
+                    <button
+                      key={key}
+                      onClick={() => {
+                        if (key === 'C') setReceivedAmount('');
+                        else if (key === '←') setReceivedAmount(prev => prev.slice(0, -1));
+                        else setReceivedAmount(prev => prev === '0' ? String(key) : prev + String(key));
+                      }}
+                      className="bg-gray-100 hover:bg-gray-200 active:bg-gray-300 py-3 rounded-xl text-xl font-black text-gray-800 transition-colors shadow-sm"
+                    >
+                      {key}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => {
+                      const total = posCart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+                      setReceivedAmount(String(total));
+                    }}
+                    className="col-span-3 bg-blue-50 hover:bg-blue-100 text-blue-600 py-3 rounded-xl font-bold border border-blue-200 shadow-sm transition-colors"
+                  >
+                    剛好 (實收 = 應收)
+                  </button>
+                </div>
+
                 <button onClick={handlePosCheckout} className="w-full bg-green-500 text-white py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-xl shadow-green-100 hover:bg-green-600 active:scale-95 transition-all mb-4">
                   <DollarSign size={24} />確認收款並結帳
                 </button>
