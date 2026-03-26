@@ -1,46 +1,50 @@
 export interface Product {
-  id: string;
-  name: string;
-  price: number;
-  image?: string;
-  category: string;
-  isAvailable?: boolean;
-  cost?: number;
+  id: string
+  name: string
+  price: number
+  image?: string
+  category: string
+  isAvailable?: boolean
+  cost?: number
 }
 
 export interface Order {
-  id: string;
-  items: { 
-    product: Product; 
-    quantity: number;
-    spiciness?: '不辣' | '小辣' | '中辣' | '大辣';
-    note?: string;
-  }[];
-  total: number;
-  status: 'pending' | 'completed' | 'cancelled';
-  createdAt: string;
-  customerName?: string;
-  customerPhone?: string;
-  pickupTime?: string;
-  orderNote?: string;
+  id: string
+  items: {
+    product: Product
+    quantity: number
+    spiciness?: '不辣' | '小辣' | '中辣' | '大辣'
+    note?: string
+  }[]
+  total: number
+  status: 'pending' | 'completed' | 'cancelled'
+  createdAt: string
+  customerName?: string
+  customerPhone?: string
+  pickupTime?: string
+  orderNote?: string
 }
 
 export interface FinanceEntry {
-  id: string;
-  type: 'income' | 'expense';
-  category?: '食材' | '人事' | '固定成本' | '其他';
-  amount: number;
-  description: string;
-  date: string;
-  items?: { product: Product; quantity: number }[];
+  id: string
+  type: 'income' | 'expense'
+  category?: '食材' | '人事' | '固定成本' | '其他'
+  amount: number
+  description: string
+  date: string
+  time?: string
+  items?: { product: Product; quantity: number }[]
+  receivedAmount?: number | null
+  changeDue?: number | null
+  createdAt?: string
 }
 
 export interface DailyClose {
-  date: string;
-  totalIncome: number;
-  totalExpense: number;
-  profit: number;
-  closedAt: string;
+  date: string
+  totalIncome: number
+  totalExpense: number
+  profit: number
+  closedAt: string
 }
 
 // Mock Data
@@ -54,51 +58,48 @@ export let PRODUCTS: Product[] = [
   { id: '7', name: '雞翅', price: 20, category: '炸物', isAvailable: true },
   { id: '8', name: '雞翅(3支)', price: 50, category: '優惠組合', isAvailable: true },
   { id: '9', name: '雞翅(7支)', price: 100, category: '優惠組合', isAvailable: true },
-];
+]
 
-export let orders: Order[] = [];
-export let financeEntries: FinanceEntry[] = [];
-export let dailyCloses: DailyClose[] = [];
-// 供應商商品
+export let orders: Order[] = []
+export let financeEntries: FinanceEntry[] = []
+export let dailyCloses: DailyClose[] = []
+
 export interface SupplierProduct {
-  id: string;
-  name: string;
-  supplier: string;
-  unit: 'kg' | '桶' | '包' | '個' | '箱' | '其他';
-  defaultPrice: number;
-  category: '食材' | '包材' | '其他';
+  id: string
+  name: string
+  supplier: string
+  unit: 'kg' | '桶' | '包' | '個' | '箱' | '其他'
+  defaultPrice: number
+  category: '食材' | '包材' | '其他'
 }
 
-// 進貨單商品項目
 export interface PurchaseOrderItem {
-  supplierProduct: SupplierProduct;
-  quantity: number;
-  unitPrice: number;
-  subtotal: number;
+  supplierProduct: SupplierProduct
+  quantity: number
+  unitPrice: number
+  subtotal: number
 }
 
-// 進貨單
 export interface PurchaseOrder {
-  id: string;
-  supplier: string;
-  items: PurchaseOrderItem[];
-  total: number;
-  status: 'draft' | 'completed';
-  date: string;
-  createdAt: string;
-  note?: string;
+  id: string
+  supplier: string
+  items: PurchaseOrderItem[]
+  total: number
+  status: 'draft' | 'completed'
+  date: string
+  createdAt: string
+  note?: string
 }
 
-// 價格歷史
 export interface PriceHistory {
-  id: string;
-  supplierProductId: string;
-  supplierProductName: string;
-  unitPrice: number;
-  date: string;
-  purchaseOrderId: string;
+  id: string
+  supplierProductId: string
+  supplierProductName: string
+  unitPrice: number
+  date: string
+  purchaseOrderId: string
 }
 
-export let supplierProducts: SupplierProduct[] = [];
-export let purchaseOrders: PurchaseOrder[] = [];
-export let priceHistories: PriceHistory[] = [];
+export let supplierProducts: SupplierProduct[] = []
+export let purchaseOrders: PurchaseOrder[] = []
+export let priceHistories: PriceHistory[] = []
