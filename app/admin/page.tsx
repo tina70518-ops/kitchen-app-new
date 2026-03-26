@@ -5,7 +5,6 @@ import { TrendingUp, TrendingDown, DollarSign, ArrowLeft, Plus, Trash2, Clipboar
 import Link from 'next/link';
 import { FinanceEntry, Order, PRODUCTS, Product, DailyClose, SupplierProduct, PurchaseOrder } from '@/lib/data';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, LineChart, Line } from 'recharts';
-import CheckoutModal from '@/components/CheckoutModal';
 
 export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -26,7 +25,6 @@ export default function AdminPage() {
   const [newProduct, setNewProduct] = useState<Partial<Product>>({ name: '', price: 0, category: '炸物', isAvailable: true, cost: 0 });
   const [posCart, setPosCart] = useState<{ product: Product, quantity: number, spiciness?: '不辣' | '小辣' | '中辣' | '大辣', note?: string }[]>([]);
   const [showPosCart, setShowPosCart] = useState(false);
-  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [isSoundEnabled, setIsSoundEnabled] = useState(false);
   const [menuSearchTerm, setMenuSearchTerm] = useState('');
@@ -35,6 +33,7 @@ export default function AdminPage() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [reportMonth, setReportMonth] = useState(new Date().toISOString().slice(0, 7));
 
+  // 進貨相關 state
   const [supplierProducts, setSupplierProducts] = useState<SupplierProduct[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [showAddSupplierProductModal, setShowAddSupplierProductModal] = useState(false);
@@ -51,11 +50,9 @@ export default function AdminPage() {
   const audioObjRef = useRef<HTMLAudioElement | null>(null);
   const isSoundEnabledRef = useRef(false);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
-  const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
+const [showNewOrderAlert, setShowNewOrderAlert] = useState(false);
   const [newOrderCount, setNewOrderCount] = useState(0);
   const CRAYON_STYLE_URL = 'https://assets.mixkit.co/active_storage/sfx/2019/2019-preview.mp3';
-
-  const posTotal = posCart.reduce((s, i) => s + i.product.price * i.quantity, 0);
 
   const unlockAndTestAudio = () => {
     setIsAudioLoading(true);
@@ -98,13 +95,16 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    const fetchOrders = async () => {
+   const fetchOrders = async () => {
       try {
         const orderRes = await fetch('/api/orders');
         if (!orderRes.ok) throw new Error('Failed to fetch orders');
         const orderData = await orderRes.json();
         if (Array.isArray(orderData)) {
+          // 過濾掉正在處理中的訂單
           const filteredOrders = orderData.filter((o: Order) => !processingOrderIds.current.has(o.id));
+          
+          // 只有在非初始載入，且訂單數量增加時才通知
           if (filteredOrders.length > previousOrderCount.current && !isInitialLoad.current) {
             if (isSoundEnabledRef.current && audioObjRef.current) {
               const audio = audioObjRef.current;
@@ -117,6 +117,7 @@ export default function AdminPage() {
             setShowNewOrderAlert(true);
             setTimeout(() => setShowNewOrderAlert(false), 5000);
           }
+          
           previousOrderCount.current = filteredOrders.length;
           isInitialLoad.current = false;
           setOrders(filteredOrders);
@@ -196,21 +197,27 @@ export default function AdminPage() {
     return { dailyRevenue, dailyOrderCount, weeklyRevenue, monthlyRevenue, reportRevenue, reportExpense, reportOrderCount, ranking, aov, dailyAov, orderCount: reportOrderCount, expensePieData };
   }, [entries, reportStartDate, reportEndDate, useCustomDateRange]);
 
+  // 月結報表數據
   const reportStats = useMemo(() => {
     const monthIncome = entries.filter(e => e.type === 'income' && e.date.startsWith(reportMonth));
     const monthExpense = entries.filter(e => e.type === 'expense' && e.date.startsWith(reportMonth));
     const totalIncome = monthIncome.reduce((s, e) => s + e.amount, 0);
     const totalExpense = monthExpense.reduce((s, e) => s + e.amount, 0);
     const netProfit = totalIncome - totalExpense;
+
+    // 上個月
     const prevMonth = new Date(reportMonth + '-01');
     prevMonth.setMonth(prevMonth.getMonth() - 1);
     const prevMonthStr = prevMonth.toISOString().slice(0, 7);
     const prevIncome = entries.filter(e => e.type === 'income' && e.date.startsWith(prevMonthStr)).reduce((s, e) => s + e.amount, 0);
     const prevExpense = entries.filter(e => e.type === 'expense' && e.date.startsWith(prevMonthStr)).reduce((s, e) => s + e.amount, 0);
     const prevProfit = prevIncome - prevExpense;
+
     const incomeGrowth = prevIncome > 0 ? Math.round(((totalIncome - prevIncome) / prevIncome) * 100) : 0;
     const expenseGrowth = prevExpense > 0 ? Math.round(((totalExpense - prevExpense) / prevExpense) * 100) : 0;
     const profitGrowth = prevProfit !== 0 ? Math.round(((netProfit - prevProfit) / Math.abs(prevProfit)) * 100) : 0;
+
+    // 每日收支趨勢
     const dailyData: Record<string, { date: string, income: number, expense: number }> = {};
     entries.filter(e => e.date.startsWith(reportMonth)).forEach(e => {
       if (!dailyData[e.date]) dailyData[e.date] = { date: e.date, income: 0, expense: 0 };
@@ -218,9 +225,13 @@ export default function AdminPage() {
       else dailyData[e.date].expense += e.amount;
     });
     const dailyChartData = Object.values(dailyData).sort((a, b) => a.date.localeCompare(b.date));
+
+    // 支出分類
     const expenseByCategory: Record<string, number> = { '食材': 0, '人事': 0, '固定成本': 0, '其他': 0 };
     monthExpense.forEach(e => { const cat = e.category || '其他'; expenseByCategory[cat] = (expenseByCategory[cat] || 0) + e.amount; });
     const expensePieData = Object.entries(expenseByCategory).filter(([_, v]) => v > 0).map(([name, value]) => ({ name, value }));
+
+    // 成本分析
     const productSales: Record<string, { name: string, quantity: number, revenue: number, cost: number }> = {};
     monthIncome.forEach(e => {
       if (e.items) {
@@ -239,6 +250,7 @@ export default function AdminPage() {
       profit: p.revenue - p.cost,
       margin: p.revenue > 0 ? Math.round(((p.revenue - p.cost) / p.revenue) * 100) : 0,
     })).sort((a, b) => b.margin - a.margin);
+
     return { totalIncome, totalExpense, netProfit, incomeGrowth, expenseGrowth, profitGrowth, prevIncome, prevExpense, prevProfit, dailyChartData, expensePieData, costAnalysis };
   }, [entries, reportMonth, products]);
 
@@ -252,18 +264,23 @@ export default function AdminPage() {
 
   const handleAddEntry = async () => {
     if (!newEntry.amount || !newEntry.description) return;
+    
+    // 先立即關閉 Modal 並清空表單
     const entry = { type: newEntry.type as 'income' | 'expense', category: newEntry.type === 'expense' ? newEntry.category : undefined, amount: Number(newEntry.amount), description: newEntry.description, date: newEntry.date };
     const tempEntry = { ...entry, id: 'temp_' + Date.now() };
     setEntries(prev => [tempEntry as any, ...prev]);
     setShowAddModal(false);
     setNewEntry({ type: 'income', amount: 0, description: '', date: new Date().toISOString().split('T')[0], category: '食材' });
+
     try {
       const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify(entry) });
       if (!res.ok) throw new Error('Finance creation failed');
       const savedEntry = await res.json();
+      // 用真實資料替換暫時資料
       setEntries(prev => prev.map(e => (e as any).id === tempEntry.id ? savedEntry : e));
     } catch (error) {
       console.error('Add entry error:', error);
+      // 失敗時移除暫時資料
       setEntries(prev => prev.filter(e => (e as any).id !== tempEntry.id));
       alert('新增紀錄失敗，請稍後再試！');
     }
@@ -296,10 +313,13 @@ export default function AdminPage() {
   };
 
   const completeOrder = async (order: Order) => {
-    processingOrderIds.current.add(order.id);
+   // 標記為處理中，防止輪詢重新拉回
+  processingOrderIds.current.add(order.id);
     previousOrderCount.current = Math.max(0, previousOrderCount.current - 1);
     setOrders(prev => prev.filter(o => o.id !== order.id));
+    // 出餐後關閉通知視窗，避免誤觸發
     setShowNewOrderAlert(false);
+    
     try {
       const financeRes = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: order.total || 0, description: `訂單收入 #${(order.id || '').slice(-4)}`, items: order.items }) });
       if (!financeRes.ok) throw new Error('Finance update failed');
@@ -311,8 +331,11 @@ export default function AdminPage() {
       processingOrderIds.current.delete(order.id);
       setOrders(prev => [order, ...prev]);
       alert('處理訂單失敗，請稍後再試！');
-    } finally {
-      setTimeout(() => { processingOrderIds.current.delete(order.id); }, 10000);
+   } finally {
+      // 延遲10秒再清除，確保資料庫已刪除
+      setTimeout(() => {
+        processingOrderIds.current.delete(order.id);
+      }, 10000);
     }
   };
 
@@ -331,30 +354,17 @@ export default function AdminPage() {
     } catch (error) { console.error('Delete order error:', error); }
   };
 
-  // ✅ 改為接收付款方式與收款金額
-  const handlePosCheckout = async (paymentMethod: string, amountPaid: number) => {
+  const handlePosCheckout = async () => {
     try {
-      if (posTotal === 0) return;
-      const change = amountPaid - posTotal;
-      const res = await fetch('/api/finance', {
-        method: 'POST',
-        body: JSON.stringify({
-          type: 'income',
-          amount: posTotal,
-          description: `現場點餐收入（收款 $${amountPaid}，找零 $${change}）`,
-          items: posCart.map(i => ({ product: i.product, quantity: i.quantity }))
-        })
-      });
+      const total = posCart.reduce((s, i) => s + i.product.price * i.quantity, 0);
+      if (total === 0) return;
+      const res = await fetch('/api/finance', { method: 'POST', body: JSON.stringify({ type: 'income', amount: total, description: `現場點餐收入`, items: posCart.map(i => ({ product: i.product, quantity: i.quantity })) }) });
       if (!res.ok) throw new Error('Finance update failed');
       const savedEntry = await res.json();
       setEntries(prev => [savedEntry, ...prev]);
       setPosCart([]);
       setShowPosCart(false);
-      setShowCheckoutModal(false);
-    } catch (error) {
-      console.error('POS Checkout error:', error);
-      alert('結帳失敗，請稍後再試！');
-    }
+    } catch (error) { console.error('POS Checkout error:', error); alert('結帳失敗，請稍後再試！'); }
   };
 
   const updatePosCart = (product: Product, delta: number) => {
@@ -491,30 +501,52 @@ export default function AdminPage() {
       setShowPriceHistoryModal(true);
     }
   };
-
-  const handleExportReport = () => {
+const handleExportReport = () => {
     const rows: string[][] = [];
+
+    // 標題
     rows.push([`九丰炸物專門店 ${reportMonth} 月結報表`]);
     rows.push([]);
+
+    // 月度總覽
     rows.push(['=== 月度總覽 ===']);
     rows.push(['項目', '本月', '上月', '差異']);
     rows.push(['總收入', `$${reportStats.totalIncome}`, `$${reportStats.prevIncome}`, `$${reportStats.totalIncome - reportStats.prevIncome}`]);
     rows.push(['總支出', `$${reportStats.totalExpense}`, `$${reportStats.prevExpense}`, `$${reportStats.totalExpense - reportStats.prevExpense}`]);
     rows.push(['淨利', `$${reportStats.netProfit}`, `$${reportStats.prevProfit}`, `$${reportStats.netProfit - reportStats.prevProfit}`]);
     rows.push([]);
+
+    // 支出分類
     rows.push(['=== 支出分類 ===']);
     rows.push(['分類', '金額']);
-    reportStats.expensePieData.forEach(item => { rows.push([item.name, `$${item.value}`]); });
+    reportStats.expensePieData.forEach(item => {
+      rows.push([item.name, `$${item.value}`]);
+    });
     rows.push([]);
+
+    // 菜品毛利分析
     rows.push(['=== 菜品毛利分析 ===']);
     rows.push(['品項', '售出數量', '營收', '成本', '毛利', '毛利率']);
     reportStats.costAnalysis.forEach(item => {
-      rows.push([item.name, String(item.quantity), `$${item.revenue}`, item.cost > 0 ? `$${item.cost}` : '未設定', item.cost > 0 ? `$${item.profit}` : '-', item.cost > 0 ? `${item.margin}%` : '-']);
+      rows.push([
+        item.name,
+        String(item.quantity),
+        `$${item.revenue}`,
+        item.cost > 0 ? `$${item.cost}` : '未設定',
+        item.cost > 0 ? `$${item.profit}` : '-',
+        item.cost > 0 ? `${item.margin}%` : '-',
+      ]);
     });
     rows.push([]);
+
+    // 每日收支
     rows.push(['=== 每日收支明細 ===']);
     rows.push(['日期', '收入', '支出', '淨利']);
-    reportStats.dailyChartData.forEach(day => { rows.push([day.date, `$${day.income}`, `$${day.expense}`, `$${day.income - day.expense}`]); });
+    reportStats.dailyChartData.forEach(day => {
+      rows.push([day.date, `$${day.income}`, `$${day.expense}`, `$${day.income - day.expense}`]);
+    });
+
+    // 轉成 CSV
     const csvContent = '\uFEFF' + rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -524,7 +556,6 @@ export default function AdminPage() {
     link.click();
     URL.revokeObjectURL(url);
   };
-
   const handleLogin = () => {
     if (password === '8888') { setUserRole('boss'); setIsAuthenticated(true); }
     else if (password === '0000') { setUserRole('staff'); setIsAuthenticated(true); }
@@ -620,7 +651,7 @@ export default function AdminPage() {
                   <span className="font-bold">結帳清單</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-lg font-black text-red-400">${posTotal}</span>
+                  <span className="text-lg font-black text-red-400">${posCart.reduce((s, i) => s + i.product.price * i.quantity, 0)}</span>
                   <CheckCircle size={20} className="text-gray-400" />
                 </div>
               </button>
@@ -670,14 +701,10 @@ export default function AdminPage() {
                 <div className="bg-red-50 rounded-2xl p-4 mb-6">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-gray-600">應收金額</span>
-                    <span className="text-3xl font-black text-red-500">${posTotal}</span>
+                    <span className="text-3xl font-black text-red-500">${posCart.reduce((s, i) => s + i.product.price * i.quantity, 0)}</span>
                   </div>
                 </div>
-                {/* ✅ 改成開啟找零 Modal */}
-                <button
-                  onClick={() => setShowCheckoutModal(true)}
-                  className="w-full bg-green-500 text-white py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-xl shadow-green-100 hover:bg-green-600 active:scale-95 transition-all mb-4"
-                >
+                <button onClick={handlePosCheckout} className="w-full bg-green-500 text-white py-5 rounded-2xl font-black text-xl flex items-center justify-center gap-3 shadow-xl shadow-green-100 hover:bg-green-600 active:scale-95 transition-all mb-4">
                   <DollarSign size={24} />確認收款並結帳
                 </button>
               </div>
@@ -922,6 +949,7 @@ export default function AdminPage() {
         </div>
       ) : activeTab === 'report' ? (
         <div className="space-y-6 pb-20">
+          {/* 月份選擇 */}
           <div className="flex items-center gap-3 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
             <FileText size={20} className="text-red-500" />
             <div className="flex-1">
@@ -929,26 +957,39 @@ export default function AdminPage() {
               <input type="month" className="w-full bg-transparent text-sm font-bold text-gray-800 outline-none" value={reportMonth} onChange={(e) => setReportMonth(e.target.value)} />
             </div>
           </div>
+
+         {/* 匯出按鈕 */}
           <button onClick={handleExportReport} className="w-full flex items-center justify-center gap-2 bg-gray-800 text-white py-3 rounded-2xl font-bold shadow-lg hover:bg-black transition-all">
-            <FileText size={18} />匯出 {reportMonth} 月報表 (CSV)
+            <FileText size={18} />
+            匯出 {reportMonth} 月報表 (CSV)
           </button>
+
+          {/* 月度總覽 */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-green-50 p-4 rounded-2xl border border-green-100 text-center">
               <p className="text-[10px] font-bold text-green-400 mb-1">總收入</p>
               <p className="text-lg font-black text-green-600">${reportStats.totalIncome}</p>
-              <p className={`text-[10px] font-bold mt-1 ${reportStats.incomeGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>{reportStats.incomeGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.incomeGrowth)}%</p>
+              <p className={`text-[10px] font-bold mt-1 ${reportStats.incomeGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportStats.incomeGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.incomeGrowth)}%
+              </p>
             </div>
             <div className="bg-red-50 p-4 rounded-2xl border border-red-100 text-center">
               <p className="text-[10px] font-bold text-red-400 mb-1">總支出</p>
               <p className="text-lg font-black text-red-600">${reportStats.totalExpense}</p>
-              <p className={`text-[10px] font-bold mt-1 ${reportStats.expenseGrowth <= 0 ? 'text-green-500' : 'text-red-500'}`}>{reportStats.expenseGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.expenseGrowth)}%</p>
+              <p className={`text-[10px] font-bold mt-1 ${reportStats.expenseGrowth <= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportStats.expenseGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.expenseGrowth)}%
+              </p>
             </div>
             <div className={`p-4 rounded-2xl border text-center ${reportStats.netProfit >= 0 ? 'bg-blue-50 border-blue-100' : 'bg-orange-50 border-orange-100'}`}>
               <p className={`text-[10px] font-bold mb-1 ${reportStats.netProfit >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>淨利</p>
               <p className={`text-lg font-black ${reportStats.netProfit >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>${reportStats.netProfit}</p>
-              <p className={`text-[10px] font-bold mt-1 ${reportStats.profitGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>{reportStats.profitGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.profitGrowth)}%</p>
+              <p className={`text-[10px] font-bold mt-1 ${reportStats.profitGrowth >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {reportStats.profitGrowth >= 0 ? '↑' : '↓'} {Math.abs(reportStats.profitGrowth)}%
+              </p>
             </div>
           </div>
+
+          {/* 每日趨勢圖 */}
           {reportStats.dailyChartData.length > 0 && (
             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><BarChart3 size={18} className="text-red-500" />每日收支趨勢</h3>
@@ -974,6 +1015,8 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* 支出分類圓餅圖 */}
           {reportStats.expensePieData.length > 0 && (
             <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingDown size={18} className="text-red-500" />支出分類分析</h3>
@@ -998,6 +1041,8 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* 成本分析 */}
           <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2"><TrendingUp size={18} className="text-green-500" />菜品毛利分析</h3>
             {reportStats.costAnalysis.length === 0 ? (
@@ -1007,16 +1052,18 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {reportStats.costAnalysis.map((item) => (
+                {reportStats.costAnalysis.map((item, index) => (
                   <div key={item.name} className="bg-gray-50 p-4 rounded-2xl">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <p className="font-bold text-gray-800">{item.name}</p>
                         <p className="text-xs text-gray-400">售出 {item.quantity} 份 · 營收 ${item.revenue}</p>
                       </div>
-                      <span className={`text-sm font-black px-2 py-1 rounded-lg ${item.margin >= 60 ? 'bg-green-100 text-green-600' : item.margin >= 40 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                        {item.cost > 0 ? `毛利 ${item.margin}%` : '未設成本'}
-                      </span>
+                      <div className="text-right">
+                        <span className={`text-sm font-black px-2 py-1 rounded-lg ${item.margin >= 60 ? 'bg-green-100 text-green-600' : item.margin >= 40 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                          {item.cost > 0 ? `毛利 ${item.margin}%` : '未設成本'}
+                        </span>
+                      </div>
                     </div>
                     {item.cost > 0 && (
                       <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
@@ -1028,13 +1075,15 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+
+          {/* 上月比較 */}
           <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
             <h3 className="font-bold text-gray-800 mb-4">與上月比較</h3>
             <div className="space-y-3">
               {[
-                { label: '收入', current: reportStats.totalIncome, prev: reportStats.prevIncome },
-                { label: '支出', current: reportStats.totalExpense, prev: reportStats.prevExpense },
-                { label: '淨利', current: reportStats.netProfit, prev: reportStats.prevProfit },
+                { label: '收入', current: reportStats.totalIncome, prev: reportStats.prevIncome, color: 'green' },
+                { label: '支出', current: reportStats.totalExpense, prev: reportStats.prevExpense, color: 'red' },
+                { label: '淨利', current: reportStats.netProfit, prev: reportStats.prevProfit, color: 'blue' },
               ].map(item => (
                 <div key={item.label} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                   <span className="text-sm font-bold text-gray-600">{item.label}</span>
@@ -1074,6 +1123,7 @@ export default function AdminPage() {
                 <>
                   <button onClick={() => setShowSummaryModal(true)} className="flex items-center gap-1 text-sm bg-gray-800 text-white px-3 py-1.5 rounded-lg shadow-lg"><ClipboardList size={16} />結報</button>
                   <button onClick={() => setShowAddModal(true)} className="flex items-center gap-1 text-sm bg-red-500 text-white px-3 py-1.5 rounded-lg shadow-lg shadow-red-100"><Plus size={16} />新增</button>
+                  
                 </>
               )}
             </div>
@@ -1152,16 +1202,6 @@ export default function AdminPage() {
           )}
         </div>
       )}
-
-      {/* ✅ 結帳找零 Modal */}
-      <CheckoutModal
-        isOpen={showCheckoutModal}
-        onClose={() => setShowCheckoutModal(false)}
-        onConfirm={(paymentMethod, amountPaid) => {
-          handlePosCheckout(paymentMethod, amountPaid);
-        }}
-        total={posTotal}
-      />
 
       {/* 新增供應商商品 Modal */}
       {showAddSupplierProductModal && (
@@ -1387,8 +1427,7 @@ export default function AdminPage() {
           </div>
         </div>
       )}
-
-      {/* 新訂單懸浮通知 */}
+   {/* 新訂單懸浮通知 */}
       {showNewOrderAlert && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top duration-300">
           <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[280px]">
