@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getOrders, saveOrders } from '@/lib/db';
+import { getOrders, saveOrder, saveOrders } from '@/lib/db';
+
+// ✅ 新增這個函數到 db.ts（單筆更新 status，不動其他資料）
+// 下面我也會給你 db.ts 要補的函數
 
 export async function GET() {
   const orders = await getOrders();
@@ -8,7 +11,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const orders = await getOrders();
     const body = await request.json();
     const newOrder = {
       ...body,
@@ -16,9 +18,9 @@ export async function POST(request: Request) {
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
-    
-    const updatedOrders = [newOrder, ...orders];
-    await saveOrders(updatedOrders);
+
+    // ✅ 只寫這一筆，不再讀取所有舊訂單
+    await saveOrder(newOrder);
     return NextResponse.json(newOrder);
   } catch (error) {
     console.error('Create order error:', error);
@@ -28,15 +30,11 @@ export async function POST(request: Request) {
 
 export async function PUT(request: Request) {
   try {
-    const orders = await getOrders();
     const { id, status } = await request.json();
-    const index = orders.findIndex(o => o.id === id);
-    if (index !== -1) {
-      orders[index].status = status;
-      await saveOrders(orders);
-      return NextResponse.json(orders[index]);
-    }
-    return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+
+    // ✅ 直接用 SQL 更新單筆，不再撈全部
+    await updateOrderStatus(id, status);
+    return NextResponse.json({ id, status });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 });
   }
@@ -44,10 +42,10 @@ export async function PUT(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const orders = await getOrders();
     const { id } = await request.json();
-    const filtered = orders.filter(o => o.id !== id);
-    await saveOrders(filtered);
+
+    // ✅ 直接刪單筆
+    await deleteOrder(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ error: 'Failed to delete order' }, { status: 500 });
