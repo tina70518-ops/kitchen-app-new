@@ -1661,7 +1661,7 @@ const handleExportReport = () => {
           </div>
         </div>
       )}
-  {/* 新訂單懸浮通知 */}
+ {/* 新訂單懸浮通知 */}
 {showNewOrderAlert && (
   <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-top duration-300">
     <div className="bg-gray-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 min-w-[280px]">
