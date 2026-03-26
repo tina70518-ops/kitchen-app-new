@@ -13,16 +13,22 @@ function getDb() {
   return neon(url);
 }
 
-let dbInitialized = false;
+// ✅ 修復：用 Promise 鎖避免競態條件
+let initPromise: Promise<void> | null = null;
 
 async function ensureDb() {
-  if (dbInitialized) return;
-  await initDb();
-  dbInitialized = true;
+  if (!initPromise) {
+    initPromise = initDb().catch((e) => {
+      initPromise = null; // 失敗時重置，允許重試
+      throw e;
+    });
+  }
+  return initPromise;
 }
 
 export async function initDb() {
   const sql = getDb();
+  // 用單一 transaction 建所有表，減少來回次數
   await sql`
     CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
@@ -76,15 +82,11 @@ export async function initDb() {
       date TEXT NOT NULL
     )
   `;
+
+  // ✅ 只在真的沒資料時才塞假資料
   const existing = await sql`SELECT id FROM products LIMIT 1`;
   if (existing.length === 0) {
-    for (const p of MOCK_PRODUCTS) {
-      await sql`
-        INSERT INTO products (id, name, price, category, image, is_available)
-        VALUES (${p.id}, ${p.name}, ${p.price}, ${p.category}, ${p.image ?? null}, ${p.isAvailable ?? true})
-        ON CONFLICT (id) DO NOTHING
-      `;
-    }
+    await saveProducts(MOCK_PRODUCTS);
   }
 }
 
@@ -109,22 +111,39 @@ export async function getProducts(): Promise<Product[]> {
 }
 
 export async function saveProducts(products: Product[]) {
+  if (products.length === 0) return;
   try {
     const sql = getDb();
     await ensureDb();
-    for (const p of products) {
-      await sql`
-        INSERT INTO products (id, name, price, category, image, is_available, cost)
-        VALUES (${p.id}, ${p.name}, ${p.price}, ${p.category}, ${p.image ?? null}, ${p.isAvailable ?? true}, ${p.cost ?? 0})
-        ON CONFLICT (id) DO UPDATE SET
-          name = EXCLUDED.name,
-          price = EXCLUDED.price,
-          category = EXCLUDED.category,
-          image = EXCLUDED.image,
-          is_available = EXCLUDED.is_available,
-          cost = EXCLUDED.cost
-      `;
-    }
+
+    // ✅ 批次 UPSERT，N 筆只需 1 次 DB 呼叫
+    const ids = products.map((p) => p.id);
+    const names = products.map((p) => p.name);
+    const prices = products.map((p) => p.price);
+    const categories = products.map((p) => p.category);
+    const images = products.map((p) => p.image ?? null);
+    const isAvailables = products.map((p) => p.isAvailable ?? true);
+    const costs = products.map((p) => p.cost ?? 0);
+
+    await sql`
+      INSERT INTO products (id, name, price, category, image, is_available, cost)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${names}::text[],
+        ${prices}::int[],
+        ${categories}::text[],
+        ${images}::text[],
+        ${isAvailables}::boolean[],
+        ${costs}::int[]
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        name = EXCLUDED.name,
+        price = EXCLUDED.price,
+        category = EXCLUDED.category,
+        image = EXCLUDED.image,
+        is_available = EXCLUDED.is_available,
+        cost = EXCLUDED.cost
+    `;
   } catch (e) {
     console.error('saveProducts error:', e);
   }
@@ -142,20 +161,47 @@ export async function getOrders(): Promise<Order[]> {
   }
 }
 
-export async function saveOrders(orders: Order[]) {
+// ✅ 結帳核心優化：只寫單筆，不再 DELETE 全部訂單
+export async function saveOrder(order: Order) {
   try {
     const sql = getDb();
     await ensureDb();
-    await sql`DELETE FROM orders`;
-    for (const o of orders) {
-      await sql`
-        INSERT INTO orders (id, data, status, created_at)
-        VALUES (${o.id}, ${JSON.stringify(o)}, ${o.status}, ${o.createdAt})
-        ON CONFLICT (id) DO UPDATE SET
-          data = EXCLUDED.data,
-          status = EXCLUDED.status
-      `;
-    }
+    await sql`
+      INSERT INTO orders (id, data, status, created_at)
+      VALUES (${order.id}, ${JSON.stringify(order)}, ${order.status}, ${order.createdAt})
+      ON CONFLICT (id) DO UPDATE SET
+        data = EXCLUDED.data,
+        status = EXCLUDED.status
+    `;
+  } catch (e) {
+    console.error('saveOrder error:', e);
+  }
+}
+
+// 保留批次版本供需要時使用（例如資料遷移）
+export async function saveOrders(orders: Order[]) {
+  if (orders.length === 0) return;
+  try {
+    const sql = getDb();
+    await ensureDb();
+
+    const ids = orders.map((o) => o.id);
+    const datas = orders.map((o) => JSON.stringify(o));
+    const statuses = orders.map((o) => o.status);
+    const createdAts = orders.map((o) => o.createdAt);
+
+    await sql`
+      INSERT INTO orders (id, data, status, created_at)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${datas}::jsonb[],
+        ${statuses}::text[],
+        ${createdAts}::timestamptz[]
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        data = EXCLUDED.data,
+        status = EXCLUDED.status
+    `;
   } catch (e) {
     console.error('saveOrders error:', e);
   }
@@ -174,17 +220,25 @@ export async function getFinanceEntries(): Promise<FinanceEntry[]> {
 }
 
 export async function saveFinanceEntries(entries: FinanceEntry[]) {
+  if (entries.length === 0) return;
   try {
     const sql = getDb();
     await ensureDb();
-    // 不再先清空，改用 UPSERT 避免資料遺失
-    for (const e of entries) {
-      await sql`
-        INSERT INTO finance_entries (id, data, date)
-        VALUES (${e.id}, ${JSON.stringify(e)}, ${e.date})
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-      `;
-    }
+
+    // ✅ 批次 UPSERT
+    const ids = entries.map((e) => e.id);
+    const datas = entries.map((e) => JSON.stringify(e));
+    const dates = entries.map((e) => e.date);
+
+    await sql`
+      INSERT INTO finance_entries (id, data, date)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${datas}::jsonb[],
+        ${dates}::text[]
+      )
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+    `;
   } catch (e) {
     console.error('saveFinanceEntries error:', e);
   }
@@ -203,17 +257,22 @@ export async function getDailyCloses(): Promise<DailyClose[]> {
 }
 
 export async function saveDailyCloses(closes: DailyClose[]) {
+  if (closes.length === 0) return;
   try {
     const sql = getDb();
     await ensureDb();
-    await sql`DELETE FROM daily_closes`;
-    for (const c of closes) {
-      await sql`
-        INSERT INTO daily_closes (date, data)
-        VALUES (${c.date}, ${JSON.stringify(c)})
-        ON CONFLICT (date) DO UPDATE SET data = EXCLUDED.data
-      `;
-    }
+
+    const dates = closes.map((c) => c.date);
+    const datas = closes.map((c) => JSON.stringify(c));
+
+    await sql`
+      INSERT INTO daily_closes (date, data)
+      SELECT * FROM unnest(
+        ${dates}::text[],
+        ${datas}::jsonb[]
+      )
+      ON CONFLICT (date) DO UPDATE SET data = EXCLUDED.data
+    `;
   } catch (e) {
     console.error('saveDailyCloses error:', e);
   }
@@ -232,17 +291,22 @@ export async function getSupplierProducts(): Promise<SupplierProduct[]> {
 }
 
 export async function saveSupplierProducts(products: SupplierProduct[]) {
+  if (products.length === 0) return;
   try {
     const sql = getDb();
     await ensureDb();
-    await sql`DELETE FROM supplier_products`;
-    for (const p of products) {
-      await sql`
-        INSERT INTO supplier_products (id, data)
-        VALUES (${p.id}, ${JSON.stringify(p)})
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-      `;
-    }
+
+    const ids = products.map((p) => p.id);
+    const datas = products.map((p) => JSON.stringify(p));
+
+    await sql`
+      INSERT INTO supplier_products (id, data)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${datas}::jsonb[]
+      )
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+    `;
   } catch (e) {
     console.error('saveSupplierProducts error:', e);
   }
@@ -261,17 +325,26 @@ export async function getPurchaseOrders(): Promise<PurchaseOrder[]> {
 }
 
 export async function savePurchaseOrders(orders: PurchaseOrder[]) {
+  if (orders.length === 0) return;
   try {
     const sql = getDb();
     await ensureDb();
-    await sql`DELETE FROM purchase_orders`;
-    for (const o of orders) {
-      await sql`
-        INSERT INTO purchase_orders (id, data, status, created_at)
-        VALUES (${o.id}, ${JSON.stringify(o)}, ${o.status}, ${o.createdAt})
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status
-      `;
-    }
+
+    const ids = orders.map((o) => o.id);
+    const datas = orders.map((o) => JSON.stringify(o));
+    const statuses = orders.map((o) => o.status);
+    const createdAts = orders.map((o) => o.createdAt);
+
+    await sql`
+      INSERT INTO purchase_orders (id, data, status, created_at)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${datas}::jsonb[],
+        ${statuses}::text[],
+        ${createdAts}::timestamptz[]
+      )
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status
+    `;
   } catch (e) {
     console.error('savePurchaseOrders error:', e);
   }
@@ -290,17 +363,24 @@ export async function getPriceHistories(): Promise<PriceHistory[]> {
 }
 
 export async function savePriceHistories(histories: PriceHistory[]) {
+  if (histories.length === 0) return;
   try {
     const sql = getDb();
     await ensureDb();
-    await sql`DELETE FROM price_histories`;
-    for (const h of histories) {
-      await sql`
-        INSERT INTO price_histories (id, data, date)
-        VALUES (${h.id}, ${JSON.stringify(h)}, ${h.date})
-        ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
-      `;
-    }
+
+    const ids = histories.map((h) => h.id);
+    const datas = histories.map((h) => JSON.stringify(h));
+    const dates = histories.map((h) => h.date);
+
+    await sql`
+      INSERT INTO price_histories (id, data, date)
+      SELECT * FROM unnest(
+        ${ids}::text[],
+        ${datas}::jsonb[],
+        ${dates}::text[]
+      )
+      ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data
+    `;
   } catch (e) {
     console.error('savePriceHistories error:', e);
   }
