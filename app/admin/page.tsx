@@ -184,12 +184,13 @@ const interval = setInterval(() => { fetchOrders(); fetchFinance(); }, 3000);
 return () => clearInterval(interval);
 
   const { displayIncome, displayExpense } = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const inRange = (e: FinanceEntry) => useCustomDateRange ? (e.date >= reportStartDate && e.date <= reportEndDate) : (e.date === today);
-    const inc = entries.filter(e => e.type === 'income' && inRange(e)).reduce((s, e) => s + e.amount, 0);
-    const exp = entries.filter(e => e.type === 'expense' && inRange(e)).reduce((s, e) => s + e.amount, 0);
-    return { displayIncome: inc, displayExpense: exp };
-  }, [entries, useCustomDateRange, reportStartDate, reportEndDate]);
+  const today = new Date().toISOString().split('T')[0];
+  const inRange = (e: FinanceEntry) =>
+    useCustomDateRange ? (e.date >= reportStartDate && e.date <= reportEndDate) : (e.date === today);
+  const inc = entries.filter(e => e.type === 'income' && inRange(e)).reduce((s, e) => s + e.amount, 0);
+  const exp = entries.filter(e => e.type === 'expense' && inRange(e)).reduce((s, e) => s + e.amount, 0);
+  return { displayIncome: inc, displayExpense: exp };
+}, [entries, useCustomDateRange, reportStartDate, reportEndDate]);
 
   const chartData = useMemo(() => {
     const grouped = entries.reduce((acc, entry) => {
